@@ -1,0 +1,158 @@
+This is a list of all the modules in this library (and
+the tools). It shows what works with what compiler.
+Currently, ghc = 4.07, hugs = STG Hugs. We use !hugs
+to signify there is no current intention to support
+this module.
+
+This file will eventually be in XML format, and form
+a table in the documentation.
+
+------------------------------------------------------------------------------
+./concurrent/Channel.lhs : ghc
+./concurrent/ChannelVar.lhs : ghc
+./concurrent/Concurrent.lhs : ghc
+./concurrent/Merge.lhs : ghc
+./concurrent/Parallel.lhs : ghc
+./concurrent/SampleVar.lhs : ghc
+./concurrent/Semaphore.lhs : ghc
+./concurrent/Strategies.lhs : ghc
+------------------------------------------------------------------------------
+./data/edison/Assoc/Assoc.hs : ghc, hugs
+./data/edison/Assoc/AssocDefaults.hs : ghc, hugs
+./data/edison/Assoc/AssocList.hs : ghc, hugs
+./data/edison/Assoc/PatriciaLoMap.hs : ghc, hugs
+./data/edison/Coll/Collection.hs : ghc, hugs
+./data/edison/Coll/CollectionDefaults.hs : ghc, hugs
+./data/edison/Coll/CollectionUtils.hs : ghc, hugs
+./data/edison/Coll/LazyPairingHeap.hs : ghc, hugs
+./data/edison/Coll/LeftistHeap.hs : ghc, hugs
+./data/edison/Coll/MinHeap.hs : ghc, hugs
+./data/edison/Coll/SkewHeap.hs : ghc, hugs
+./data/edison/Coll/SplayHeap.hs : ghc, hugs
+./data/edison/Coll/TestOrdBag.hs : ghc, hugs
+./data/edison/Coll/TestOrdSet.hs : ghc, hugs
+./data/edison/Coll/UnbalancedSet.hs : ghc, hugs
+./data/edison/EdisonPrelude.hs : ghc
+./data/edison/QuickCheck.hs : ghc, hugs	-- to remove (use util version)
+./data/edison/Seq/BankersQueue.hs : ghc, hugs
+./data/edison/Seq/BinaryRandList.hs : ghc, hugs
+./data/edison/Seq/BraunSeq.hs : ghc, hugs
+./data/edison/Seq/JoinList.hs : ghc, hugs
+./data/edison/Seq/ListSeq.hs : ghc, hugs
+./data/edison/Seq/MyersStack.hs : ghc, hugs
+./data/edison/Seq/RandList.hs : ghc, hugs
+./data/edison/Seq/RevSeq.hs : ghc, hugs
+./data/edison/Seq/Sequence.hs : ghc, hugs
+./data/edison/Seq/SequenceDefaults.hs : ghc, hugs
+./data/edison/Seq/SimpleQueue.hs : ghc, hugs
+./data/edison/Seq/SizedSeq.hs : ghc, hugs
+./data/edison/Seq/TestSeq.hs : ghc, hugs
+./data/FiniteMap.lhs : ghc, hugs
+./data/Set.lhs : ghc, hugs
+------------------------------------------------------------------------------
+./lang/Addr.lhs : ghc
+./lang/Bits.lhs : ghc
+./lang/ByteArray.lhs : ghc
+./lang/CCall.lhs : ghc
+./lang/CString.lhs : ghc
+./lang/Dynamic.lhs : ghc
+./lang/Exception.lhs : ghc
+./lang/FFI.lhs : ghc
+./lang/Foreign.lhs : ghc
+./lang/ForeignObj.lhs : ghc
+./lang/GlaExts.lhs : ghc
+./lang/Int.lhs : ghc, hugs
+./lang/IOExts.lhs : ghc, hugs
+./lang/LazyST.lhs : ghc
+./lang/monads/MonadEither.lhs : ghc, hugs
+./lang/monads/MonadFix.lhs : ghc, hugs
+./lang/monads/MonadIdentity.lhs : ghc, hugs
+./lang/monads/MonadReader.lhs : ghc, hugs
+./lang/monads/MonadRWS.lhs : ghc, hugs
+./lang/monads/MonadState.lhs : ghc, hugs
+./lang/monads/MonadTrans.lhs : ghc, hugs
+./lang/monads/MonadWriter.lhs : ghc, hugs
+./lang/monads/Monoid.lhs : ghc, hugs
+./lang/MutableArray.lhs : ghc
+./lang/NativeInfo.lhs : ghc
+./lang/NumExts.lhs : ghc, hugs
+./lang/PackedString.lhs : ghc
+./lang/ShowFunctions.lhs : ghc, hugs
+./lang/ST.lhs : ghc, hugs
+./lang/Stable.lhs : ghc
+./lang/StablePtr.lhs : ghc
+./lang/TimeExts.lhs : ghc
+./lang/Weak.lhs : ghc
+./lang/Word.lhs : ghc, hugs
+------------------------------------------------------------------------------
+./net/BSD.lhs : ghc
+./net/Socket.lhs : ghc
+./net/SocketPrim.lhs : ghc
+./net/URI.hs : ghc
+------------------------------------------------------------------------------
+./posix/Posix.lhs : ghc
+./posix/PosixDB.lhs : ghc
+./posix/PosixErr.lhs : ghc
+./posix/PosixFiles.lhs : ghc
+./posix/PosixIO.lhs : ghc
+./posix/PosixProcEnv.lhs : ghc
+./posix/PosixProcPrim.lhs : ghc
+./posix/PosixTTY.lhs : ghc
+./posix/PosixUtil.lhs : ghc
+------------------------------------------------------------------------------
+./text/haxml/lib/Haskell2Xml.hs : ghc, hugs
+./text/haxml/lib/ParseSTLib.hs : ghc, hugs
+./text/haxml/lib/Xml2Haskell.hs : ghc, hugs
+./text/haxml/lib/XmlCombinators.hs : ghc, hugs
+./text/haxml/lib/XmlHtmlGen.hs : ghc, hugs
+./text/haxml/lib/XmlHtmlParse.hs : ghc, hugs
+./text/haxml/lib/XmlHtmlPP.hs : ghc, hugs
+./text/haxml/lib/XmlLex.hs : ghc, hugs
+./text/haxml/lib/XmlLib.hs : ghc, hugs
+./text/haxml/lib/XmlParse.hs : ghc, hugs
+./text/haxml/lib/XmlPP.hs : ghc, hugs
+./text/haxml/lib/XmlTypes.hs : ghc, hugs
+./text/html/Html.lhs : ghc, hugs
+./text/html/HtmlBlockTable.lhs : ghc, hugs
+./text/MatchPS.lhs : ghc
+./text/Pretty.lhs : ghc, hugs
+./text/Regex.lhs : ghc
+./text/RegexString.lhs : ghc
+------------------------------------------------------------------------------
+./tools/DrIFT/ChaseImports.hs : ghc
+./tools/DrIFT/CommandP.hs : ghc
+./tools/DrIFT/DataP.lhs : ghc
+./tools/DrIFT/DigitToInt.hs : ghc
+./tools/DrIFT/DrIFT.lhs : ghc
+./tools/DrIFT/example/Artifical.hs : ghc
+./tools/DrIFT/example/BTree.hs : ghc
+./tools/DrIFT/example/Example.hs : ghc
+./tools/DrIFT/example/Foo.lhs : ghc
+./tools/DrIFT/example/Xref.hs : ghc
+./tools/DrIFT/Literate.lhs : ghc
+./tools/DrIFT/ParseLib2.hs : ghc
+./tools/DrIFT/PreludData.hs : ghc
+./tools/DrIFT/Pretty.lhs : ghc
+./tools/DrIFT/RuleUtils.hs : ghc
+./tools/DrIFT/StandardRules.lhs : ghc
+./tools/DrIFT/UserRuleBinary.hs : ghc
+./tools/DrIFT/UserRules.hs : ghc
+./tools/DrIFT/UserRuleXml.hs : ghc
+./tools/DtdToHaskell/DtdToHaskell.hs : ghc
+./tools/DtdToHaskell/DtdToTypeDefPP.hs : ghc
+./tools/Xtract/Xtract.hs : ghc
+./tools/Xtract/XtractLex.hs : ghc
+./tools/Xtract/XtractParse.hs : ghc
+------------------------------------------------------------------------------
+./util/check/QuickCheck.hs : ghc, hugs
+./util/check/QuickCheckBatch.hs : ghc, hugs
+./util/check/QuickCheckPoly.hs : ghc, hugs
+./util/check/QuickCheckUtils.hs : ghc, hugs
+./util/GetOpt.lhs : ghc, hugs
+./util/MD5.lhs : ghc, !hugs
+./util/Memo.lhs : ghc
+./util/Observe.lhs : ghc, hugs
+./util/Readline.lhs : ghc
+./util/Select.lhs : ghc
+------------------------------------------------------------------------------
+

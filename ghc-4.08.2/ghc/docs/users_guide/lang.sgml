@@ -1,0 +1,15 @@
+<Chapter id="ghc-language-features">
+<Title>GHC Language Features</Title>
+
+&glasgowexts
+&parallel
+&vs-hs
+
+</Chapter>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("users_guide.sgml" "book" "chapter") ***
+     ;;; End: ***
+ -->

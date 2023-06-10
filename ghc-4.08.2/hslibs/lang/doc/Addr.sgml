@@ -1,0 +1,172 @@
+
+<Sect1 id="sec-Addr">
+<Title><literal>Addr</literal><IndexTerm><Primary>Addr</Primary></IndexTerm>
+</Title>
+
+<Para>
+This library provides machine addresses, i.e., handles to chunks of raw
+memory.  It is primarily intended for use with the Foreign Function Interface
+(FFI) and will usually be imported via the module <Literal>Foreign</Literal>
+(see <XRef LinkEnd="sec-Foreign">).
+</Para>
+
+<Sect2>
+  <Title>Address Type and Arithmetic</Title>
+
+<ProgramListing>
+data Addr      -- abstract handle for memory addresses
+               -- instance of: Eq, Ord, Show, Typeable
+
+data AddrOff   -- abstract handle of address offsets
+               -- instance of: Eq, Ord, Show, Enum, Num, Real, Integral, Typeable
+
+nullAddr  :: Addr
+alignAddr :: Addr -&#62; Int     -&#62; Addr
+plusAddr  :: Addr -&#62; AddrOff -&#62; Addr
+minusAddr :: Addr -&#62; Addr    -&#62; AddrOff
+</ProgramListing>
+
+<Para>
+The following specifies the behaviour of the four function definitions.
+</Para>
+<VariableList>
+
+<VarListEntry>
+<Term><Literal>nullAddr  :: Addr</Literal></Term>
+<ListItem><Para>
+The constant <Function>nullAddr</Function> contains a distinguished value of
+<Literal>Addr</Literal> that denotes the absence of an address that is
+associated with a valid memory location.
+</Para></ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Literal>alignAddr :: Addr -&#62; Int -&#62; Addr</Literal></Term>
+<ListItem><Para>
+Given an arbitrary address and an alignment constraint,
+<Function>alignAddr</Function> yields the next higher address that fulfills the
+alignment constraint.  An alignment constraint <VarName>x</VarName> is
+fulfilled by any address divisible by <VarName>x</VarName>.  This operation is
+idempotent.
+</Para></ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Literal>plusAddr  :: Addr -&#62; AddrOff -&#62; Addr</Literal></Term>
+<ListItem><Para>
+Advances the given address by the given address offset.
+</Para></ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Literal>minusAddr :: Addr -&#62; Addr -&#62; AddrOff</Literal></Term>
+<ListItem><Para>
+Computes the offset required to get from the first to  the second argument.
+We have
+</Para>
+<ProgramListing>
+   a2 == a1 `plusAddr` (a2 `minusAddr` a1)
+</ProgramListing>
+</ListItem>
+</VarListEntry>
+
+</VariableList>
+
+</Sect2>
+
+
+<Sect2>
+  <Title>The Standard C-side Interface</Title>
+
+<Para>
+The following definition is available to C programs inter-operating with
+Haskell code when including the header <Literal>HsFFI.h</Literal>.
+</Para>
+<ProgramListing>
+typedef void* HsAddr;  /* C representation of an Addr */
+</ProgramListing>
+
+</Sect2>
+
+
+<Sect2>
+  <Title>Deprecated Functions</Title>
+
+<Para>
+The following functions are deprecated in the new FFI.  Use the module 
+<Literal>Storable</Literal> (<XRef LinkEnd="sec-Storable">) instead.
+</Para>
+
+<ProgramListing>
+-- read value out of _immutable_ memory
+indexCharOffAddr       :: Addr -&#62; Int -&#62; Char
+indexIntOffAddr        :: Addr -&#62; Int -&#62; Int
+indexAddrOffAddr       :: Addr -&#62; Int -&#62; Addr
+indexFloatOffAddr      :: Addr -&#62; Int -&#62; Float
+indexDoubleOffAddr     :: Addr -&#62; Int -&#62; Double
+indexWord8OffAddr      :: Addr -&#62; Int -&#62; Word8
+indexWord16OffAddr     :: Addr -&#62; Int -&#62; Word16
+indexWord32OffAddr     :: Addr -&#62; Int -&#62; Word32
+indexWord64OffAddr     :: Addr -&#62; Int -&#62; Word64
+indexInt8OffAddr       :: Addr -&#62; Int -&#62; Int8
+indexInt16OffAddr      :: Addr -&#62; Int -&#62; Int16
+indexInt32OffAddr      :: Addr -&#62; Int -&#62; Int32
+indexInt64OffAddr      :: Addr -&#62; Int -&#62; Int64
+indexStablePtrOffAddr  :: Addr -&gt; Int -&gt; StablePtr a
+
+-- read value out of mutable memory
+readCharOffAddr        :: Addr -&#62; Int -&#62; IO Char
+readIntOffAddr         :: Addr -&#62; Int -&#62; IO Int
+readAddrOffAddr        :: Addr -&#62; Int -&#62; IO Addr
+readFloatOffAddr       :: Addr -&#62; Int -&#62; IO Float
+readDoubleOffAddr      :: Addr -&#62; Int -&#62; IO Double
+readWord8OffAddr       :: Addr -&#62; Int -&#62; IO Word8
+readWord16OffAddr      :: Addr -&#62; Int -&#62; IO Word16
+readWord32OffAddr      :: Addr -&#62; Int -&#62; IO Word32
+readWord64OffAddr      :: Addr -&#62; Int -&#62; IO Word64
+readInt8OffAddr        :: Addr -&#62; Int -&#62; IO Int8
+readInt16OffAddr       :: Addr -&#62; Int -&#62; IO Int16
+readInt32OffAddr       :: Addr -&#62; Int -&#62; IO Int32
+readInt64OffAddr       :: Addr -&#62; Int -&#62; IO Int64
+readStablePtrOffAddr   :: Addr -&gt; Int -&gt; IO (StablePtr a)
+
+-- write value into mutable memory
+writeCharOffAddr       :: Addr -&#62; Int -&#62; Char   -&#62; IO ()
+writeIntOffAddr        :: Addr -&#62; Int -&#62; Int    -&#62; IO ()
+writeAddrOffAddr       :: Addr -&#62; Int -&#62; Addr   -&#62; IO ()
+writeFloatOffAddr      :: Addr -&#62; Int -&#62; Float  -&#62; IO ()
+writeDoubleOffAddr     :: Addr -&#62; Int -&#62; Double -&#62; IO ()
+writeWord8OffAddr      :: Addr -&#62; Int -&#62; Word8  -&#62; IO ()
+writeWord16OffAddr     :: Addr -&#62; Int -&#62; Word16 -&#62; IO ()
+writeWord32OffAddr     :: Addr -&#62; Int -&#62; Word32 -&#62; IO ()
+writeWord64OffAddr     :: Addr -&#62; Int -&#62; Word64 -&#62; IO ()
+writeInt8OffAddr       :: Addr -&#62; Int -&#62; Int8   -&#62; IO ()
+writeInt16OffAddr      :: Addr -&#62; Int -&#62; Int16  -&#62; IO ()
+writeInt32OffAddr      :: Addr -&#62; Int -&#62; Int32  -&#62; IO ()
+writeInt64OffAddr      :: Addr -&#62; Int -&#62; Int64  -&#62; IO ()
+writeForeignObjOffAddr :: Addr -&#62; Int -&#62; ForeignObj -&#62; IO ()
+writeStablePtrOffAddr  :: Addr -&#62; Int -&#62; StablePtr a -&#62; IO ()
+
+-- conversion to/from Int, a little bit doubtful...
+addrToInt              :: Addr -&gt; Int
+intToAddr              :: Int  -&gt; Addr
+
+-- completely deprecated
+data Word = W# Word#
+wordToInt              :: Word -&gt; Int
+intToWord              :: Int  -&gt; Word
+</ProgramListing>
+
+</Sect2>
+
+<Sect2>
+  <Title>Hugs Specifics</Title>
+
+<Para>
+Hugs provides <Literal>Addr</Literal> and <Function>nullAddr</Function> but
+does not provide any of the index, read or write functions.  They can be
+implemented using GreenCard if required.
+</Para>
+</Sect2>
+
+</Sect1>

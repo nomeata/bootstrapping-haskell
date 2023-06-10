@@ -1,0 +1,9 @@
+<!DOCTYPE BOOK PUBLIC "-//OASIS//DTD DocBook V3.1//EN" [
+<!ENTITY % hslibs-ent SYSTEM "hslibs-ent.sgml">
+%hslibs-ent;
+<!ENTITY hslibs-book SYSTEM "hslibs-book.sgml">
+]>
+
+<book id="book-hslibs">
+&hslibs-book;
+</book>

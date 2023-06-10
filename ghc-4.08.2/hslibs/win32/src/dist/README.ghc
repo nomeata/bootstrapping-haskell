@@ -1,0 +1,14 @@
+* Win32 libraries for ghc-2.10
+
+To use the Win32 libs with ghc-2.10, you'll
+need to do the following:
+
+ - unpack/install distribution on top of
+   your current ghc-2.10 tree.
+ - apply the patch "ghc-win32.patch" and
+   re-run "make in-place", i.e.,
+   
+   foo% cd /to/the/top/of/ghc/bin/dist/tree
+   foo% ( cd bin/i386-unknown-cygwin32/ghc-2.10/ ; patch < ../../../ghc-win32.patch )
+   foo% make in-place
+

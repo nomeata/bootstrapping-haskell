@@ -1,0 +1,41 @@
+
+<Sect1 id="Set">
+<Title>The <Literal>Set</Literal> type
+</Title>
+
+<Para>
+<IndexTerm><Primary>Set module (misc syslib)</Primary></IndexTerm>
+</Para>
+
+<Para>
+Our implementation of <Emphasis>sets</Emphasis> (key property: no duplicates) is just
+a variant of the <Literal>FiniteMap</Literal> module.
+</Para>
+
+<Para>
+
+<ProgramListing>
+data Set        -- abstract
+                -- instance of: Eq
+
+emptySet        :: Set a
+mkSet           :: Ord a =&#62; [a]  -&#62; Set a
+setToList       :: Set a -&#62; [a]
+unitSet         :: a -&#62; Set a
+singletonSet    :: a -&#62; Set a  -- deprecated, use unitSet.
+
+union           :: Ord a =&#62; Set a -&#62; Set a -&#62; Set a
+unionManySets   :: Ord a =&#62; [Set a] -&#62; Set a
+minusSet        :: Ord a =&#62; Set a -&#62; Set a -&#62; Set a
+mapSet          :: Ord a =&#62; (b -&#62; a) -&#62; Set b -&#62; Set a
+intersect       :: Ord a =&#62; Set a -&#62; Set a -&#62; Set a
+
+elementOf       :: Ord a =&#62; a -&#62; Set a -&#62; Bool
+isEmptySet      :: Set a -&#62; Bool
+
+cardinality     :: Set a -&#62; Int
+</ProgramListing>
+
+</Para>
+
+</Sect1>

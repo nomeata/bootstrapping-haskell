@@ -1,0 +1,29 @@
+
+<Sect1 id="sec-LazyST">
+<Title><literal>LazyST</literal><IndexTerm><Primary>LazyST</Primary></IndexTerm></Title>
+
+<Para>
+This library is identical to <Literal>ST</Literal> except that the <Literal>ST</Literal> monad
+instance is <Emphasis>lazy</Emphasis>.  The lazy ST monad tends to be more prone to
+space leaks than the strict version, so most programmers will use the
+former unless laziness is explicitly required.  <Literal>LazyST</Literal> provides
+two additional operations:
+</Para>
+
+<Para>
+
+<ProgramListing>
+lazyToStrictST :: LazyST.ST s a -&#62; ST.ST s a
+strictToLazyST :: ST.ST s a -&#62; LazyST.ST s a 
+</ProgramListing>
+
+</Para>
+
+<Para>
+These are used to convert between lazy and strict state threads.  The
+semantics with respect to laziness are as you would expect: the strict
+state thread passed to <Function>strictToLazyST</Function> is not performed until the
+result of the lazy state thread it returns is demanded.
+</Para>
+
+</Sect1>

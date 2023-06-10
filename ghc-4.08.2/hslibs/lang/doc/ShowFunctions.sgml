@@ -1,0 +1,23 @@
+<Sect1 id="sec-ShowFunctions">
+<Title><literal>ShowFunctions</literal>
+<IndexTerm>
+  <Primary>ShowFunctions</Primary>
+  <secondary>library</secondary>
+</IndexTerm>
+</Title>
+
+<Para>
+The <literal>ShowFunctions</literal> module contains the following
+instance of <literal>Show</literal> for function types
+
+<programlisting>
+instance Show (a -&gt; b) where
+	showsPrec _ _ = showString "&lt;function&gt;"
+</programlisting>
+<IndexTerm>
+  <Primary><literal>Show</literal></Primary>
+  <secondary>instance for functions</secondary>
+</IndexTerm>
+
+</para>
+</sect1>

@@ -1,0 +1,86 @@
+<sect1 id="sec-byte-array">
+  <title><literal>ByteArray</literal></title>
+  <indexterm><primary><literal>ByteArray</literal></primary></indexterm>
+      
+  <para>NOTE: The <literal>ByteArray</literal> interface is
+  deprecated, please use <literal>IArray</literal> (<xref
+  linkend="sec-IArray">) or <literal>MArray</literal> (<xref
+  linkend="sec-MArray">) instead.</para>
+
+<Para>
+<IndexTerm><Primary><literal>ByteArray</literal> interface</Primary></IndexTerm>
+<Literal>ByteArray</Literal>s are chunks of immutable Haskell heap:
+</Para>
+
+<Para>
+
+<ProgramListing>
+data ByteArray ix -- abstract
+
+instance Eq (ByteArray ix)
+
+newByteArray        :: Ix ix =&#62; (ix,ix) -&#62; ST s (ByteArray ix)
+
+indexCharArray      :: Ix ix =&#62; ByteArray ix -&#62; ix -&#62; Char
+indexIntArray       :: Ix ix =&#62; ByteArray ix -&#62; ix -&#62; Int
+indexWordArray      :: Ix ix =&#62; ByteArray ix -&#62; ix -&#62; Word
+indexAddrArray      :: Ix ix =&#62; ByteArray ix -&#62; ix -&#62; Addr
+indexFloatArray     :: Ix ix =&#62; ByteArray ix -&#62; ix -&#62; Float
+indexDoubleArray    :: Ix ix =&#62; ByteArray ix -&#62; ix -&#62; Double
+indexStablePtrArray :: Ix ix =&gt; ByteArray ix -&gt; ix -&gt; (StablePtr a)
+
+sizeofByteArray     :: Ix ix =&#62; ByteArray ix -&#62; Int
+boundsOfByteArray   :: Ix ix =&gt; ByteArray ix -&gt; (ix, ix)
+</ProgramListing>
+
+<IndexTerm><Primary>newByteArray</Primary></IndexTerm>
+<IndexTerm><Primary>indexCharArray</Primary></IndexTerm>
+<IndexTerm><Primary>indexIntArray</Primary></IndexTerm>
+<IndexTerm><Primary>indexAddrArray</Primary></IndexTerm>
+<IndexTerm><Primary>indexFloatArray</Primary></IndexTerm>
+<IndexTerm><Primary>indexDoubleArray</Primary></IndexTerm>
+<IndexTerm><Primary>indexDoubleArray</Primary></IndexTerm>
+<IndexTerm><Primary>boundsOfByteArray</Primary></IndexTerm>
+<IndexTerm><Primary>sizeofByteArray</Primary></IndexTerm>
+</Para>
+
+<Para>
+<Emphasis>Remarks:</Emphasis>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+The operation <Function>newByteArray</Function> creates a byte array of length
+equal to the range of its indices <Emphasis>in bytes</Emphasis>.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+<Function>sizeofByteArray</Function> returns the size of the byte array, <Emphasis>in bytes</Emphasis>.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Equality on byte arrays is value equality, not pointer equality (as is
+the case for its mutable variant.) Two byte arrays are equal if
+they're of the same length and they're pairwise equal.
+
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect1>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("../../doc/hslibs.sgml" "book" "chapter" "sect1") ***
+     ;;; End: ***
+ -->

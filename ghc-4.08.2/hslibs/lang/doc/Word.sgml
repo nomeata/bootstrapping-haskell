@@ -1,0 +1,158 @@
+
+<Sect1 id="sec-Word">
+<Title><literal>Word</literal><IndexTerm><Primary>Word</Primary></IndexTerm>
+</Title>
+
+<Para>
+This library provides unsigned integers of various sizes.
+The types supported are as follows:
+</Para>
+
+<Para>
+
+<InformalTable>
+<TGroup Cols="2">
+<ColSpec Align="Left" Colsep="0">
+<ColSpec Align="Left" Colsep="0">
+<TBody>
+<Row>
+<Entry>type </Entry>
+<Entry> number of bits </Entry>
+</Row>
+<Row>
+<Entry>
+Word8 </Entry>
+<Entry> 8 </Entry>
+</Row>
+<Row>
+<Entry>
+Word16 </Entry>
+<Entry> 16 </Entry>
+</Row>
+<Row>
+<Entry>
+Word32 </Entry>
+<Entry> 32 </Entry>
+</Row>
+<Row>
+<Entry>
+Word64 </Entry>
+<Entry> 64 </Entry>
+</Row>
+</TBody>
+
+</TGroup>
+</informaltable>
+
+<indexterm><primary><literal>Word8</literal></primary></indexterm>
+<indexterm><primary><literal>Word16</literal></primary></indexterm>
+<indexterm><primary><literal>Word32</literal></primary></indexterm>
+<indexterm><primary><literal>Word64</literal></primary></indexterm>
+
+</Para>
+
+<Para>
+For each type <Emphasis>W</Emphasis> above, we provide the following
+functions and instances.  The type <Emphasis>I</Emphasis> refers to
+the signed integer type of the same size.
+</para>
+
+<para>
+<ProgramListing>
+data <emphasis>W</emphasis>            -- Unsigned Ints
+instance Eq       <emphasis>W</emphasis>
+instance Ord      <emphasis>W</emphasis>
+instance Show     <emphasis>W</emphasis>
+instance Read     <emphasis>W</emphasis>
+instance Bounded  <emphasis>W</emphasis>
+instance Num      <emphasis>W</emphasis>
+instance Real     <emphasis>W</emphasis>
+instance Integral <emphasis>W</emphasis>
+instance Enum     <emphasis>W</emphasis>
+instance Ix       <emphasis>W</emphasis>
+instance Bits     <emphasis>W</emphasis>
+</ProgramListing>
+</para>
+
+<sect2>
+<title>Notes</title>
+
+<para>
+<ItemizedList>
+<ListItem>
+
+<Para>
+All arithmetic is performed modulo 2&circ;n.
+
+One non-obvious consequence of this is that <Function>negate</Function>
+should <Emphasis>not</Emphasis> raise an error on negative arguments.
+
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+For coercing between any two integer types, use
+<function>fromIntegral</function>, which is specialized for all the
+common cases so should be fast enough.  Coercing word types to and
+from integer types preserves representation, not sign.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+It would be very natural to add a type a type
+<Literal>Natural</Literal> providing an unbounded size unsigned
+integer&mdash;just as <Literal>Integer</Literal> provides unbounded
+size signed integers.  We do not do that yet since there is no demand
+for it.  Doing so would require <Function>Bits.bitSize</Function> to
+return <Literal>Maybe Int</Literal>.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+The rules that hold for <Literal>Enum</Literal> instances over a bounded type
+such as <Literal>Int</Literal> (see the section of the Haskell report dealing
+with arithmetic sequences) also hold for the <Literal>Enum</Literal> instances
+over the various <Literal>Word</Literal> types defined here.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+Right and left shifts by amounts greater than or equal to the width of
+the type result in a zero result.  This is contrary to the behaviour
+in C, which is undefined; a common interpretation is to truncate
+the shift count to the width of the type, for example <Literal>1 &lt;&lt;
+32 == 1</Literal> in some C implementations.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</sect2>
+<sect2>
+<title>Implementation notes</title>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+Hugs only provides <Literal>Eq</Literal>, <Literal>Ord</Literal>,
+<Literal>Read</Literal> and <Literal>Show</Literal> instances for
+<Literal>Word64</Literal> at the moment.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</sect2>
+
+</Sect1>

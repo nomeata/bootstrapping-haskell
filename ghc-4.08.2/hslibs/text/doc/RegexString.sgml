@@ -1,0 +1,38 @@
+<Sect1 id="RegexString">
+<Title><Literal>RegexString</Literal>: Regex matching made simple
+</Title>
+
+<Para>
+<IndexTerm><Primary>RegexString library (misc syslib)</Primary></IndexTerm>
+<IndexTerm><Primary>regular-expressions library</Primary></IndexTerm>
+</Para>
+
+<Para>
+(Simon Marlow supplied the String Regex wrapper.)
+</Para>
+
+<Para>
+For simple regular expression operations, the <Literal>Regex</Literal> library is a
+little heavyweight.  <Literal>RegexString</Literal> permits regex matching on ordinary
+Haskell <Literal>String</Literal>s.
+</Para>
+
+<Para>
+The datatypes and functions that <Literal>RegexString</Literal> provides are:
+
+<ProgramListing>
+data Regex              -- a compiled regular expression
+
+mkRegex
+        :: String       -- regexp to compile
+        -&#62; Regex        -- compiled regexp
+
+matchRegex
+        :: Regex        -- compiled regexp
+        -&#62; String       -- string to match
+        -&#62; Maybe [String] -- text of $1, $2, ... (if matched)
+</ProgramListing>
+
+</Para>
+
+</Sect1>

@@ -1,0 +1,28 @@
+foreach $file (@ARGV) {
+	&process($file);
+}
+
+sub process {
+	local($filename,$input) = @_;
+	$input++;
+	unless (open($input,$filename)) {
+		print STDERR "Can't open $filename: $!\n";
+		return;
+	}
+	($dllfile = $filename) =~ s/\.gc/\.c/;
+	($hsfile = $filename) =~ s/\.gc/\.hs/;
+	# Depend on itself.
+	print "$hsfile: $filename\n";
+	while (<$input>) {
+		if (/^import\s+(\w*)/) {
+			local $module = $1;
+			# Direct dependencies
+			print "$dllfile:	$module.gc\n" if -f "$module.gc";
+			# Indirect dependencies
+			print "$filename:	$module.gc\n" if -f "$module.gc";
+		} elsif (/%#include\s+"(.*)"/) {
+			print "$dllfile:	$1\n";
+		}
+	}
+	close $input;
+}

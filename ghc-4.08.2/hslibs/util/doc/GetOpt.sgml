@@ -1,0 +1,127 @@
+<Sect1 id="sec-GetOpt">
+<Title><Literal>GetOpt</Literal>: Command line parsing
+<IndexTerm><Primary>GetOpt</Primary></IndexTerm>
+</Title>
+
+<Para>
+The <Literal>GetOpt</Literal> library contains Sven Panne's Haskell implementation
+of <Function>getopt</Function>, providing features nigh-on identical to GNU <Function>getopt</Function>:
+</Para>
+
+<Para>
+
+<Screen>
+module GetOpt where
+
+-- representing a single option:
+data OptDescr a
+ = Option [Char]         --    list of short option characters
+          [String]       --    list of long option strings (without "--")
+          (ArgDescr a)   --    argument descriptor
+          String         --    explanation of option for user
+
+-- argument option:
+data ArgDescr a
+   = NoArg                   a         --    no argument expected
+   | ReqArg (String       -&#62; a) String --    option requires argument
+   | OptArg (Maybe String -&#62; a) String --    optional argument
+
+usageInfo :: String          -- header
+          -&#62; [OptDescr a]    -- options recognised 
+          -&#62; String          -- nicely formatted decription of options
+
+getOpt :: ArgOrder a    -- non-option handling
+       -&#62; [OptDescr a]  -- options recognised
+       -&#62; [String]      -- the command-line
+       -&#62; ( [a]         -- options
+          , [String]    -- non-options
+	  ,[String]     -- error messages
+	  )
+
+data ArgOrder a
+  = RequireOrder
+  | Permute
+  | ReturnInOrder (String -&#62; a)
+
+</Screen>
+
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ The command-line options recognised is described by a list of
+<Literal>OptDescr</Literal> values. The <Literal>OptDescr</Literal> describes the long and short
+strings that recognise the option, together with a help string and
+info on whether the option takes extra arguments, if any.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+From a list of option values, <Function>usageInfo</Function> returns a nicely
+formatted string that enumerates the different options supported
+together with a short message about what
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+To decode a command-line with respect to a list of options,
+<Function>getOpt</Function> is used. It processes the command-line, and returns
+the list of values that matched (and those that didn't). The first
+argument to <Function>getOpt</Function> controls whether the user is to give the
+options in any old order or not.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+To hopefully illuminate the role of the different <Literal>GetOpt</Literal> data
+structures, here's the command-line options for a (very simple)
+compiler:
+</Para>
+
+<Para>
+
+<Screen>
+module Opts where
+
+import GetOpt
+import Maybe ( fromMaybe )
+
+data Flag 
+ = Verbose  | Version 
+ | Input String | Output String | LibDir String
+   deriving Show
+
+options :: [OptDescr Flag]
+options =
+ [ Option ['v']     ["verbose"] (NoArg Verbose)       "chatty output on stderr"
+ , Option ['V','?'] ["version"] (NoArg Version)       "show version number"
+ , Option ['o']     ["output"]  (OptArg outp "FILE")  "output FILE"
+ , Option ['c']     []          (OptArg inp  "FILE")  "input FILE"
+ , Option ['L']     ["libdir"]  (ReqArg LibDir "DIR") "library directory"
+ ]
+
+inp,outp :: Maybe String -&#62; Flag
+outp = Output . fromMaybe "stdout"
+inp  = Input  . fromMaybe "stdout"
+
+compilerOpts :: [String] -&#62; IO ([Flag], [String])
+compilerOpts argv = 
+   case (getOpt Permute options argv) of
+      (o,n,[]  ) -&#62; return (o,n)
+      (_,_,errs) -&#62; fail (userError (concat errs ++ usageInfo header options))
+  where header = "Usage: ic [OPTION...] files..."
+</Screen>
+
+</Para>
+
+</Sect1>

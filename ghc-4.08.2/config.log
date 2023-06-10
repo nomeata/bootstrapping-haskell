@@ -1,0 +1,6 @@
+This file contains any messages produced by compilers while
+running configure, to aid debugging if configure makes a mistake.
+
+configure:645: checking host system type
+configure:666: checking target system type
+configure:684: checking build system type

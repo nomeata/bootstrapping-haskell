@@ -1,0 +1,110 @@
+
+<Sect1 id="sec-ST">
+<Title><literal>ST</literal><IndexTerm><Primary>ST</Primary></IndexTerm> </Title>
+
+<Para>
+This library provides support for <Emphasis>strict</Emphasis> state threads, as
+described in the PLDI '94 paper by John Launchbury and Simon Peyton
+Jones <Citation>LazyStateThreads</Citation>.  In addition to the monad <Literal>ST</Literal>,
+it also provides mutable variables <Literal>STRef</Literal> and mutable arrays
+<Literal>STArray</Literal>.
+</Para>
+
+<Para>
+
+<ProgramListing>
+module ST( module ST, module Monad ) where
+import Monad
+
+data ST s a        -- abstract type
+runST              :: forall a. (forall s. ST s a) -&#62; a
+fixST              :: (a -&#62; ST s a) -&#62; ST s a
+unsafeInterleaveST :: ST s a -&#62; ST s a
+instance Functor (ST s)
+instance Monad   (ST s)
+
+data STRef s a     -- mutable variables in state thread s
+                   -- containing values of type a.
+newSTRef           :: a -&#62; ST s (STRef s a)
+readSTRef          :: STRef s a -&#62; ST s a
+writeSTRef         :: STRef s a -&#62; a -&#62; ST s ()
+instance Eq (STRef s a)
+
+data STArray s ix elt -- mutable arrays in state thread s
+                      -- indexed by values of type ix
+                      -- containing values of type a.
+newSTArray          :: Ix ix =&#62; (ix,ix) -&#62; elt -&#62; ST s (STArray s ix elt)
+boundsSTArray       :: Ix ix =&#62; STArray s ix elt -&#62; (ix, ix)
+readSTArray         :: Ix ix =&#62; STArray s ix elt -&#62; ix -&#62; ST s elt
+writeSTArray        :: Ix ix =&#62; STArray s ix elt -&#62; ix -&#62; elt -&#62; ST s ()
+thawSTArray         :: Ix ix =&#62; Array ix elt -&#62; ST s (STArray s ix elt)
+freezeSTArray       :: Ix ix =&#62; STArray s ix elt -&#62; ST s (Array ix elt)
+unsafeFreezeSTArray :: Ix ix =&#62; STArray s ix elt -&#62; ST s (Array ix elt)  
+instance Eq (STArray s ix elt)
+
+unsafeIOToST	    :: IO   a -&#62; ST s a
+stToIO              :: ST s a -&#62; IO a
+</ProgramListing>
+
+</Para>
+
+<Para>
+Notes:
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ 
+GHC also supports ByteArrays --- these aren't supported by Hugs yet.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ 
+The operations <Function>freezeSTArray</Function> and <Function>thawSTArray</Function> convert mutable
+arrays to and from immutable arrays.  Semantically, they are identical
+to copying the array and they are usually implemented that way.  The
+operation <Function>unsafeFreezeSTArray</Function> is a faster version of
+<Function>freezeSTArray</Function> which omits the copying step.  It's a safe substitute for
+<Function>freezeSTArray</Function> if you don't modify the mutable array after freezing it.
+
+<!-- 
+  <item>
+     Note that it is possible to install Hugs 1.4 without support for lazy
+     state threads, and hence the primitives described here may not be
+     available in all implementations.  Also, in contrast with the
+     implementation of lazy state threads in previous releases of Hugs and
+     Gofer, there is no direct relationship between the
+     <tt/<idx/ST monad// and the <tt/<idx/IO monad//.
+  -->
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Hugs provides <Function>thenLazyST</Function> and <Function>thenStrictST</Function> so that you can
+import <Literal>LazyST</Literal> (say) and still use the strict instance in those
+places where it matters.  GHC implements LazyST and ST using different
+types, so this isn't possible.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Operations for coercing an <Literal>ST</Literal> action into an <Literal>IO</Literal> one, and
+vice versa are also provided. Notice that coercing an <Literal>IO</Literal> action
+into an <Literal>ST</Literal> action is 'lossy', since any exception raised within the
+<Literal>IO</Literal> action will not be caught within the <Literal>ST</Literal> monad, as it
+doesn't support (monadic) exceptions.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect1>

@@ -1,0 +1,36 @@
+This is the root directory for functional-programming tools
+distributed by the Computing Science Department at Glasgow University.
+Simon Peyton Jones <simonpj@microsoft.com> is the ringleader of this
+effort.  The tools are:
+
+    ghc		the Glasgow Haskell compilation system
+    hslibs	collection of Haskell libraries
+    haggis	the Haggis GUI toolkit
+    happy	the Happy Haskell parser generator
+    hdirect     Haskell interop tool
+    green-card	a foreign function interface pre-processor for Haskell.
+    nofib	the NoFib Haskell benchmarking suite
+    literate	the Glasgow "literate programming" system
+    glafp-utils shared utility programs
+    mk	        GNU make setup used by all of fptools
+    docs        documentation on the installing and using
+                the fptools suite.
+
+Components which are always part of a distribution (never stand-alone)
+are "glafp-utils" and "mk" (a configuration system).
+
+Quick start:  the following is *supposed* to work
+
+	$ ./configure
+	$ make boot
+	$ make
+	$ make install
+
+where 'make' is whatever GNU make is called on your system.  The
+configuration script is a standard GNU autoconf script which accepts
+all the normal arguments, eg. --prefix=<blah> to install the package
+somewhere other than /usr/local.  Try ./configure --help to get a full
+list of the options.
+
+There is usually an ANNOUNCE* file with any distribution.  Please
+consult that, or the <piece>/README file, to find out how to proceed.

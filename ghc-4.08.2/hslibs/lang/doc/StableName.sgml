@@ -1,0 +1,97 @@
+
+<Sect1 id="sec-stable-names">
+<Title><literal>StableName</literal><IndexTerm><Primary>StableName</Primary></IndexTerm>
+</Title>
+
+<Para>
+A haskell object can be given a <Emphasis>stable name</Emphasis> by calling
+<Function>makeStableName</Function> on it.  Stable names solve the following problem:
+suppose you want to build a hash table with Haskell objects as keys,
+but you want to use pointer equality for comparison; maybe because the
+keys are large and hashing would be slow, or perhaps because the keys
+are infinite in size.  We can't build a hash table using the address
+of the object as the key, because objects get moved around by the
+garbage collector, meaning a re-hash would be necessary after every
+garbage collection.
+</Para>
+
+<Para>
+Enter stable names.  A stable name is an abstract entity that supports
+equality and hashing, with the following interface:
+</Para>
+
+<Para>
+
+<ProgramListing>
+data StableName a -- abstract, instance Eq.
+makeStableName :: a -&#62; IO (StableName a)
+hashStableName :: StableName a -&#62; Int
+</ProgramListing>
+
+</Para>
+
+<Para>
+All these operations run in constant time.
+</Para>
+
+<Para>
+Stable names have the following properties:
+</Para>
+
+<Para>
+
+<OrderedList>
+<ListItem>
+
+<Para>
+If <Literal>sn1 :: StablePtr</Literal> and <Literal>sn2 :: StablePtr</Literal> and <Literal>sn1
+== sn2</Literal> then <VarName>sn1</VarName> and <VarName>sn2</VarName> are either the same stable name,
+or they were created by calls to <Function>makeStableName</Function> on the same
+object.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ The reverse is not necessarily true: if two stable names are
+not equal, it doesn't mean that they don't refer to the same Haskell
+object (although they probably don't).
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+There is no <Function>freeStableName</Function> operation.  Stable names are
+reclaimed by the runtime system when they are no longer needed.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+There is no <Function>deRefStableName</Function> operation.  You can't get back from a stable name to the original Haskell object.  The reason for
+this is that the existence of a stable name for an object doesn't
+guarantee the existence of the object itself; it can still be garbage
+collected. 
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ There is a <Function>hashStableName</Function> operation, which converts a
+stable name to an <Literal>Int</Literal>.  The <Literal>Int</Literal> returned is not necessarily
+unique (that is, it doesn't satisfy property (1) above), but it can be
+used for building hash tables of stable names.
+</Para>
+</ListItem>
+
+</OrderedList>
+
+</Para>
+
+<Para>
+Properties (1) and (2) are similar to stable pointers, but the key
+differences are that you can't get back to the original object from a
+stable name, and you can convert one to an <Literal>Int</Literal> for hashing.
+</Para>
+
+</Sect1>

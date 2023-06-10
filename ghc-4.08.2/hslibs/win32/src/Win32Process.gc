@@ -1,0 +1,11 @@
+module Win32Process where
+
+import Win32Types
+import StdDIS
+%#include <windows.h>
+%#include "win32debug.h"
+
+-- constant to wait for a very long time.
+%const DWORD [ INFINITE ]
+
+%fun Sleep :: DWORD -> IO ()

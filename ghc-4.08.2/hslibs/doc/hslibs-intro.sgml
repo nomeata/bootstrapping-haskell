@@ -1,0 +1,86 @@
+<Chapter id="hslibs-intro">
+<Title>Introduction</Title>
+
+<Para> Hugs and GHC provide a common set of libraries to aid
+portability. This document specifies the interfaces to these libraries
+and documents known differences. It is the hope of the GHC team that
+these libraries in the long run become part of every Haskell system.
+</Para>
+
+<Sect1 id="sec-Naming-conventions">
+<Title>Naming Conventions<IndexTerm><Primary>Naming conventions</Primary></IndexTerm></Title>
+
+<Para>
+The set of interfaces specified in this document try to adhere to the
+following naming conventions: 
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+Actions that create a new values have the prefix <Function>new</Function> followed by
+the name of the type of object they're creating, e.g., <Function>newIORef</Function>,
+<Function>newChan</Function> etc.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Operations that read a value from a mutable object are prefixed with
+<Function>read</Function>, and operations that update the contents have the prefix
+<Function>write</Function>, e.g., <Function>readChan</Function>, <Function>readIOArray</Function>.
+
+Notes: 
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+This differs from the convention used to name the operations for
+reading and writing to a file <Literal>Handle</Literal>, where <Function>get</Function> and <Function>put</Function>
+are used instead.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Operations provided by various concurrency abstractions, e.g., <Literal>MVar</Literal>,
+<Literal>CVar</Literal> , also deviate from this naming scheme. This is perhaps
+defensible, since the read and write operations have additional
+behaviour, e.g., <Function>takeMVar</Function> tries to read the current value
+of an <Literal>MVar</Literal>, locking it if it succeeds.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Conversions operators have the form <Function>AToB</Function> where <Literal>A</Literal> and <Literal>B</Literal>
+are the types we're converting between.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Operations that lazily read values from a mutable object/handle, have
+the form <Function>getXContents</Function>, e.g., <Function>Channel.getChanContents</Function> and
+<Function>IO.hGetContents</Function>. (OK, so the latter isn't called
+<Function>getHandleContents</Function>, but you hopefully get the picture.)
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect1>
+
+
+</Chapter>

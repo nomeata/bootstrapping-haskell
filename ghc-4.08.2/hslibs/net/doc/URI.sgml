@@ -1,0 +1,58 @@
+<Sect1 id="sec-URI">
+<Title><literal>URI</literal>
+</Title>
+<IndexTerm>
+  <Primary><literal>URI</literal></Primary>
+  <secondary>library</secondary>
+</IndexTerm>
+
+<para> The <literal>URI</literal> library provides utilities for
+  parsing and manipulating Uniform Resource Identifiers (a more
+  general form of Uniform Resource Locators, or URLs). URIs are
+  described in <ulink url="http://www.faqs.org/rfcs/rfc2396.html">RFC
+  2396</ulink>.
+</para>
+
+<ProgramListing>
+module URI where 
+
+data URI {
+  scheme,	:: String,
+  authority,	:: String,
+  path,		:: String,
+  query,	:: String,
+  fragment	:: String
+  }
+instance Show URI
+
+parseURI        :: String -> Maybe URI
+	
+relativeTo      :: URI -> URI -> Maybe URI
+
+-- support for putting strings into URI-friendly
+-- escaped format and getting them back again.
+-- Can't be done transparently, because certain characters
+-- have different meanings in different kinds of URI.
+
+reserved 	:: Char -> Bool
+unreserved 	:: Char -> Bool
+isAllowedInURI	:: Char -> Bool
+escapeString    :: String -> (Char->Bool) -> String
+unEscapeString	:: String -> String
+</programlisting>
+
+<indexterm>
+  <primary><literal>URI</literal></primary>
+  <secondary>datatype</secondary>
+</indexterm>
+
+<indexterm><primary><literal>parseURI</literal></primary></indexterm>
+<indexterm><primary><literal>relativeTo</literal></primary></indexterm>
+<indexterm><primary><literal>reserved</literal></primary></indexterm>
+<indexterm><primary><literal>unreserved</literal></primary></indexterm>
+<indexterm><primary><literal>isAllowedInURI</literal></primary></indexterm>
+<indexterm><primary><literal>escapeString</literal></primary></indexterm>
+<indexterm><primary><literal>unEscapeString</literal></primary></indexterm>
+
+</sect1>
+

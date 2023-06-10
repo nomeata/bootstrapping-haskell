@@ -1,0 +1,6 @@
+_interface_ Name 1
+_exports_
+Name Name;
+_declarations_
+1 data Name;
+

@@ -1,0 +1,170 @@
+
+<Sect1 id="sec-Int">
+<Title><literal>Int</literal>
+<IndexTerm><Primary>Int</Primary><secondary>module</secondary></IndexTerm>
+</Title>
+
+<Para>
+This interface provides a collection of sized, signed integers. The
+types supported are as follows:
+</Para>
+
+<Para>
+
+<InformalTable>
+<TGroup Cols="2">
+<ColSpec Align="Left" Colsep="0">
+<ColSpec Align="Left" Colsep="0">
+<TBody>
+<Row>
+<Entry>type </Entry>
+<Entry> number of bits </Entry>
+</Row>
+<Row>
+<Entry>
+Int8 </Entry>
+<Entry> 8 </Entry>
+</Row>
+<Row>
+<Entry>
+Int16 </Entry>
+<Entry> 16 </Entry>
+</Row>
+<Row>
+<Entry>
+Int32 </Entry>
+<Entry> 32 </Entry>
+</Row>
+<Row>
+<Entry>
+Int64 </Entry>
+<Entry> 64 </Entry>
+</Row>
+</TBody>
+
+</TGroup>
+</InformalTable>
+
+<indexterm><primary><literal>Int8</literal></primary></indexterm>
+<indexterm><primary><literal>Int16</literal></primary></indexterm>
+<indexterm><primary><literal>Int32</literal></primary></indexterm>
+<indexterm><primary><literal>Int64</literal></primary></indexterm>
+
+</Para>
+
+<Para>
+For each type <Emphasis>I</Emphasis> above, we provide the following instances.
+</Para>
+
+<Para>
+
+<ProgramListing>
+data <emphasis>I</emphasis>            -- Signed Ints
+instance Eq       <emphasis>I</emphasis>
+instance Ord      <emphasis>I</emphasis>
+instance Show     <emphasis>I</emphasis>
+instance Read     <emphasis>I</emphasis>
+instance Bounded  <emphasis>I</emphasis>
+instance Num      <emphasis>I</emphasis>
+instance Real     <emphasis>I</emphasis>
+instance Integral <emphasis>I</emphasis>
+instance Enum     <emphasis>I</emphasis>
+instance Ix       <emphasis>I</emphasis>
+instance Bits     <emphasis>I</emphasis>
+</ProgramListing>
+
+</Para>
+
+
+<sect2>
+<title>Notes</title>
+
+<Para>
+
+<ItemizedList>
+
+<ListItem>
+<Para>
+All arithmetic is performed modulo 2&circ;n.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+For coercing between various integer types, use
+<function>fromIntegral</function>, which is specialized for all the
+common cases so should be fast enough.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+The rules that hold for <Literal>Enum</Literal> instances over a bounded type
+such as <Literal>Int</Literal> (see the section of the Haskell report dealing
+with arithmetic sequences) also hold for the <Literal>Enum</Literal> instances
+over the various <Literal>Int</Literal> types defined here.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+Right and left shifts by amounts greater than or equal to the width of
+the type result in either zero or -1, depending on the sign of the
+value being shifted.  This is contrary to the behaviour in C, which is
+undefined; a common interpretation is to truncate the shift count to
+the width of the type, for example <Literal>1 &lt;&lt; 32 == 1</Literal> in some
+C implementations.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+Hugs does not provide <Literal>Int64</Literal> at the moment.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</sect2>
+
+
+<sect2>
+  <title>Deprecated Functions</title>
+
+<Para>
+The following functions are deprecated in the new FFI.  Do
+<Emphasis>not</Emphasis> use the following functions if you are interested in
+portability.  Most of these functions are here for legacy reasons and may just
+vanish one day.  You have been warned.
+</Para>
+
+<Para>
+The <Literal>Int</Literal> module also exports the overloaded operations for
+converting to and from Haskell <Literal>Int</Literal>s.
+However, for coercing between various integer types, better use
+<function>fromIntegral</function>, which is specialized for all the
+common cases so should be fast enough.
+</Para>
+
+<Para>
+<ProgramListing>
+toInt   :: (Integral a) =&#62; a -&#62; Int
+fromInt :: (Num a) =&#62; Int -&#62; a
+</ProgramListing>
+<indexterm><primary><literal>toInt</literal></primary></indexterm>
+<indexterm><primary><literal>fromInt</literal></primary></indexterm>
+</Para>
+
+<Para>
+Portability note: both Hugs98 and all releases of GHC prior to
+ghc-4.05 also exports these two via the Prelude. So, to have code that
+uses <Function>toInt</Function> and <Function>fromInt</Function> be
+maximally portable, make sure you add an import on
+<Literal>Int</Literal> (even if the version of Hugs or GHC you're
+currently using may not export these two from there.)
+</Para>
+</sect2>
+
+</Sect1>

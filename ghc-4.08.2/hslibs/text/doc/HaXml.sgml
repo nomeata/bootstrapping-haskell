@@ -1,0 +1,19 @@
+<Sect1 id="sec-HaXml">
+<Title><Literal>HaXml</Literal>: Handling XML data
+<IndexTerm><Primary>HaXml</Primary></IndexTerm>
+</Title>
+
+<Para>HaXml is a library for converting Haskell data structures into
+XML and vice versa.  The documentation hasn't been incorporated into
+this book as yet, but for now it can be found at
+<ulink url="http://www.cs.york.ac.uk/fp/HaXml/">The HaXml page</ulink>.
+</Para>
+
+</Sect1>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("../../doc/hslibs.sgml" "book" "chapter" "sect1") ***
+     ;;; End: ***
+ -->

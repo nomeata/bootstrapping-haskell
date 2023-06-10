@@ -1,0 +1,21 @@
+
+Known bugs/issues in nativeGen, 000228 (JRS)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+-- absC -> stix translation for GET_TAG and in fact anything
+   to do with the packed-halfword layout info itbl field is
+   pretty dubious.  I think I have it fixed for big and little
+   endian 32-bit, but it won't work at all on a 64 bit platform.
+
+-- There may or may not be bugs in some of the x86 insn selector 
+   code in MachCode.lhs.  I have checked all of it against the 
+   Rules of the Game (+ Rules of the game for Amodes) recorded in 
+   that file, but am not 100% convinced that it is all correct.
+   I think most of it is, tho.
+
+-- It won't compile on Solaris or Alphas because the insn selectors
+   are not up-to-date.
+
+-- NCG introduces a massive space leak; I think it generates all the
+   assembly code before printing any of it out (a depressingly 
+   familiar story ...).  Fixing this will await a working heap profiler.

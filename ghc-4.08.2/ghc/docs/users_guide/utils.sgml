@@ -1,0 +1,130 @@
+<Chapter id="utils">
+<Title>Other Haskell utility programs
+</Title>
+
+<IndexTerm><Primary>utilities, Haskell</Primary></IndexTerm>
+
+<Para>
+This section describes other program(s) which we distribute, that help
+with the Great Haskell Programming Task.
+</Para>
+
+<Sect1 id="hstags">
+<Title>Emacs `TAGS' for Haskell: <Command>hstags</Command>
+</Title>
+
+<Para>
+<IndexTerm><Primary>hstags</Primary></IndexTerm>
+<IndexTerm><Primary>TAGS for Haskell</Primary></IndexTerm>
+</Para>
+
+<Para>
+`Tags' is a facility for indexing the definitions of
+programming-language things in a multi-file program, and then using
+that index to jump around among these definitions.
+</Para>
+
+<Para>
+Rather than scratch your head, saying &ldquo;Now where did we define
+`foo'?&rdquo;, you just do (in Emacs) <Literal>M-. foo RET</Literal>, and You're There!
+Some people go wild over this stuff&hellip;
+</Para>
+
+<Para>
+GHC comes with a program <Command>hstags</Command>, which build Emacs-able TAGS files.  The invocation syntax is:
+
+<Screen>
+hstags [GHC-options] file [files...]
+</Screen>
+
+</Para>
+
+<Para>
+The best thing is just to feed it your GHC command-line flags.
+A good Makefile entry might be:
+
+<ProgramListing>
+tags:
+        $(RM) TAGS
+        hstags $(GHC_FLAGS) *.lhs
+</ProgramListing>
+
+</Para>
+
+<Para>
+The only flags of its own are: <Option>-v</Option> to be verbose; <Option>-a</Option> to
+<Emphasis>APPEND</Emphasis> to the TAGS file, rather than write to it.
+</Para>
+
+<Para>
+Shortcomings: (1)&nbsp;Instance declarations don't get into the TAGS file
+(but the definitions inside them do); as instances aren't named, this
+is probably just as well.  (2)&nbsp;Data-constructor definitions don't get
+in.  Go for the corresponding type constructor instead.
+</Para>
+
+<Para>
+(Actually, GHC also comes with <Command>etags</Command> &lsqb;for C&rsqb;, and <Command>perltags</Command>
+&lsqb;for You Know What&rsqb;.  And&mdash;I cannot tell a lie&mdash;there is Denis
+Howe's <Command>fptags</Command> &lsqb;for Haskell, etc.&rsqb; in the <Filename>ghc/CONTRIB</Filename>
+section&hellip;)
+</Para>
+
+</Sect1>
+
+<Sect1 id="happy">
+<Title>&ldquo;Yacc for Haskell&rdquo;: <Command>happy</Command>
+</Title>
+
+<Para>
+<IndexTerm><Primary>happy</Primary></IndexTerm>
+<IndexTerm><Primary>Yacc for Haskell</Primary></IndexTerm>
+<IndexTerm><Primary>parser generator for Haskell</Primary></IndexTerm>
+Andy Gill and Simon Marlow have written a parser-generator for
+Haskell, called <Command>happy</Command>.<IndexTerm><Primary>happy parser generator</Primary></IndexTerm> <Command>Happy</Command>
+is to Haskell what <Command>Yacc</Command> is to C.
+</Para>
+
+<Para>
+You can get <Command>happy</Command> from <ulink
+url="http://www.haskell.org/happy/">the Happy Homepage</ulink>.
+</Para>
+
+<Para>
+<Command>Happy</Command> is at its shining best when compiled by GHC.
+</Para>
+
+</Sect1>
+
+<Sect1 id="pphs">
+<Title>Pretty-printing Haskell: <Command>pphs</Command>
+</Title>
+
+<Para>
+<IndexTerm><Primary>pphs</Primary></IndexTerm>
+<IndexTerm><Primary>pretty-printing Haskell code</Primary></IndexTerm>
+</Para>
+
+<Para>
+Andrew Preece has written
+<Command>pphs</Command>,<IndexTerm><Primary>pphs</Primary></IndexTerm><IndexTerm><Primary>pretty-printing Haskell</Primary></IndexTerm>
+a utility to pretty-print Haskell code in LaTeX documents.
+Keywords in bolds, variables in italics&mdash;that sort of thing.  It is
+good at lining up program clauses and equals signs, things that are
+very tiresome to do by hand.
+</Para>
+
+<Para>
+The code is distributed with GHC in <Filename>ghc/CONTRIB/pphs</Filename>.
+</Para>
+
+</Sect1>
+
+</Chapter>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("users_guide.sgml" "book" "chapter") ***
+     ;;; End: ***
+ -->

@@ -1,0 +1,68 @@
+<Sect1 id="sec-CTypesISO">
+<Title><literal>CTypesISO</literal><IndexTerm><Primary>CTypesISO</Primary></IndexTerm>
+</Title>
+
+<Para>
+This module is part of the language-dependent part of the Foreign Function
+Interface (FFI) - for the language-independent part, see <XRef LinkEnd="sec-Foreign">.
+It defines Haskell types corresponding the most important ISO types of
+C that are not covered in the module <Literal>CTypes</Literal>.
+</Para>
+
+<Para>
+Every type has a constructor of the same name, which is currently
+exported, too. Given the large set of instances for each type, it is
+not clear if access to the concrete representation is really necessary.
+Some experience is needed before a final decision can be made in this respect.
+</Para>
+
+<Sect2 id="sec-CTypesISO-Integral">
+<Title>Integral types<IndexTerm><Primary>Integral types</Primary></IndexTerm></Title>
+
+<Para>
+The following integral types have instaces for the classes
+<Literal>Eq</Literal>, <Literal>Ord</Literal>, <Literal>Num</Literal>,
+<Literal>Read</Literal>, <Literal>Show</Literal>,
+<Literal>Enum</Literal>, <Literal>Typeable</Literal>,
+<Literal>Storable</Literal>, <Literal>Bounded</Literal>,
+<Literal>Real</Literal>, <Literal>Integral</Literal>, and
+<Literal>Bits</Literal>:
+</Para>
+<ProgramListing>
+newtype CPtrdiff	-- ptrdiff_t
+newtype CSize		-- size_t
+newtype CWChar		-- wchar_t
+newtype CSigAtomic	-- sig_atomic_t
+</ProgramListing>
+</Sect2>
+
+<Sect2 id="sec-CTypesISO-Numeric">
+<Title>Numeric types<IndexTerm><Primary>Numeric types</Primary></IndexTerm></Title>
+
+<Para>
+The following numeric types have instances for the classes
+<Literal>Eq</Literal>, <Literal>Ord</Literal>, <Literal>Num</Literal>,
+<Literal>Read</Literal>, <Literal>Show</Literal>,
+<Literal>Enum</Literal>, <Literal>Typeable</Literal>, and
+<Literal>Storable</Literal>:
+</Para>
+<ProgramListing>
+newtype CClock		-- clock_t
+newtype CTime		-- time_t
+</ProgramListing>
+</Sect2>
+
+<Sect2 id="sec-CTypesISO-Misc">
+<Title>Misc types<IndexTerm><Primary>Misc types</Primary></IndexTerm></Title>
+
+<Para>
+The following types have instances for the classes: ???
+</Para>
+<ProgramListing>
+newtype CFile		-- FILE
+newtype CFpos		-- fpos_t
+newtype CJmpBuf		-- jmp_buf
+</ProgramListing>
+</Sect2>
+
+</sect1>

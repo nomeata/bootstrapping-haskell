@@ -1,0 +1,38 @@
+<Sect1 id="Socket">
+<Title><Literal>Socket</Literal>: The high-level networking interface
+<IndexTerm><Primary>Socket</Primary></IndexTerm>
+</Title>
+
+<Para>
+The <Literal>Socket</Literal> interface is a ``higher-level'' interface to
+sockets, and it is what we recommend.  Please tell us if the facilities it
+offers are inadequate to your task! The interface is relatively modest:
+
+<ProgramListing>
+data Socket     -- instance of: Eq, Show
+
+data PortID =
+      Service String        -- Service Name eg "ftp"
+    | PortNumber PortNumber -- User defined Port Number
+    | UnixSocket String     -- Unix family socket in file system,
+                            -- not available con Cygwin/Mingw
+type Hostname    = String
+
+connectTo       :: Hostname -&#62; PortID -&#62; IO Handle
+listenOn        :: PortID -&#62; IO Socket
+
+accept          :: Socket -&#62; IO (Handle, HostName)
+
+sendTo          :: Hostname -&#62; PortID -&#62; String -&#62; IO ()
+recvFrom        :: Hostname -&#62; PortID -&#62; IO String
+
+socketPort      :: Socket -&#62; IO PortID
+
+withSocketsDo   :: IO a -&#62; IO a
+
+data PortNumber -- instance of Eq, Ord, Enum, Num, Real, Integral, Show
+mkPortNumber    :: Int -&#62; PortNumber
+</ProgramListing>
+</Para>
+
+</Sect1>

@@ -1,0 +1,99 @@
+
+<Sect1 id="FiniteMap">
+<Title>The <Literal>FiniteMap</Literal> type
+</Title>
+
+<Para>
+<IndexTerm><Primary>FiniteMap module (misc syslib)</Primary></IndexTerm>
+</Para>
+
+<Para>
+What functional programmers call a <Emphasis>finite map</Emphasis>, everyone else
+calls a <Emphasis>lookup table</Emphasis>.
+</Para>
+
+<Para>
+Out code is derived from that in this paper:
+<QUOTE
+>S Adams
+"Efficient sets: a balancing act"
+Journal of functional programming 3(4) Oct 1993, pages 553-562</QUOTE
+>
+Guess what?  The implementation uses balanced trees.
+</Para>
+
+<Para>
+
+<ProgramListing>
+data FiniteMap key elt  -- abstract
+
+--      BUILDING
+emptyFM         :: FiniteMap key elt
+unitFM          :: key -&#62; elt -&#62; FiniteMap key elt
+listToFM        :: Ord key =&#62; [(key,elt)] -&#62; FiniteMap key elt
+                        -- In the case of duplicates, the last is taken
+
+--      ADDING AND DELETING
+                   -- Throws away any previous binding
+                   -- In the list case, the items are added starting with the
+                   -- first one in the list
+addToFM         :: Ord key =&#62; FiniteMap key elt -&#62; key -&#62; elt  -&#62; FiniteMap key elt
+addListToFM     :: Ord key =&#62; FiniteMap key elt -&#62; [(key,elt)] -&#62; FiniteMap key elt
+
+                 -- Combines with previous binding
+                 -- In the combining function, the first argument is
+                 -- the "old" element, while the second is the "new" one.
+addToFM_C       :: Ord key =&#62; (elt -&#62; elt -&#62; elt)
+                           -&#62; FiniteMap key elt -&#62; key -&#62; elt
+                           -&#62; FiniteMap key elt
+addListToFM_C   :: Ord key =&#62; (elt -&#62; elt -&#62; elt)
+                           -&#62; FiniteMap key elt -&#62; [(key,elt)]
+                           -&#62; FiniteMap key elt
+
+                 -- Deletion doesn't complain if you try to delete something
+                 -- which isn't there
+delFromFM       :: Ord key =&#62; FiniteMap key elt -&#62; key   -&#62; FiniteMap key elt
+delListFromFM   :: Ord key =&#62; FiniteMap key elt -&#62; [key] -&#62; FiniteMap key elt
+
+--      COMBINING
+                 -- Bindings in right argument shadow those in the left
+plusFM          :: Ord key =&#62; FiniteMap key elt -&#62; FiniteMap key elt
+                           -&#62; FiniteMap key elt
+
+                   -- Combines bindings for the same thing with the given function
+plusFM_C        :: Ord key =&#62; (elt -&#62; elt -&#62; elt)
+                           -&#62; FiniteMap key elt -&#62; FiniteMap key elt -&#62; FiniteMap key elt
+
+minusFM         :: Ord key =&#62; FiniteMap key elt -&#62; FiniteMap key elt -&#62; FiniteMap key elt
+                   -- (minusFM a1 a2) deletes from a1 any bindings which are bound in a2
+
+intersectFM     :: Ord key =&#62; FiniteMap key elt -&#62; FiniteMap key elt -&#62; FiniteMap key elt
+intersectFM_C   :: Ord key =&#62; (elt -&#62; elt -&#62; elt)
+                           -&#62; FiniteMap key elt -&#62; FiniteMap key elt -&#62; FiniteMap key elt
+
+--      MAPPING, FOLDING, FILTERING
+foldFM          :: (key -&#62; elt -&#62; a -&#62; a) -&#62; a -&#62; FiniteMap key elt -&#62; a
+mapFM           :: (key -&#62; elt1 -&#62; elt2) -&#62; FiniteMap key elt1 -&#62; FiniteMap key elt2
+filterFM        :: Ord key =&#62; (key -&#62; elt -&#62; Bool)
+                           -&#62; FiniteMap key elt -&#62; FiniteMap key elt
+
+--      INTERROGATING
+sizeFM          :: FiniteMap key elt -&#62; Int
+isEmptyFM       :: FiniteMap key elt -&#62; Bool
+
+elemFM          :: Ord key =&#62; key -&#62; FiniteMap key elt -&#62; Bool
+lookupFM        :: Ord key =&#62; FiniteMap key elt -&#62; key -&#62; Maybe elt
+lookupWithDefaultFM
+                :: Ord key =&#62; FiniteMap key elt -&#62; elt -&#62; key -&#62; elt
+                -- lookupWithDefaultFM supplies a "default" elt
+                -- to return for an unmapped key
+
+--      LISTIFYING
+fmToList        :: FiniteMap key elt -&#62; [(key,elt)]
+keysFM          :: FiniteMap key elt -&#62; [key]
+eltsFM          :: FiniteMap key elt -&#62; [elt]
+</ProgramListing>
+
+</Para>
+
+</Sect1>

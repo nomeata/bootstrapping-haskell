@@ -1,0 +1,18 @@
+<BookInfo>
+<Title>Haskell Libraries</Title>
+<Author><OtherName>The GHC Team</OtherName></Author>
+<Address>
+<Email>glasgow-haskell-&lcub;bugs,users&rcub;-request@haskell.org</Email>
+</Address>
+</BookInfo>
+
+&hslibsintro
+&concurrent
+&data
+&lang
+&net
+&number
+&posix
+&text
+&util
+&win32

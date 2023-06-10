@@ -1,0 +1,294 @@
+
+<Sect1 id="sec-Dynamic">
+<Title><literal>Dynamic</literal><IndexTerm><Primary>Dynamic</Primary></IndexTerm> </Title>
+
+<Para>
+The <Literal>Dynamic</Literal> library provides cheap-and-cheerful
+dynamic types for Haskell. A dynamically typed value is one which
+carries type information with it at run-time, and is represented here
+by the abstract type <Literal>Dynamic</Literal>. Values can be
+converted into <Literal>Dynamic</Literal> ones, which can then be
+combined and manipulated by the program using the operations provided
+over the abstract, dynamic type. One of these operations allows you to
+(try to) convert a dynamically-typed value back into a value with the
+same (monomorphic) type it had before converting it into a
+dynamically-typed value. If the dynamically-typed value isn't of the
+desired type, the coercion will fail.
+</Para>
+
+<Para>
+The <Literal>Dynamic</Literal> library is capable of dealing with monomorphic types
+only; no support for polymorphic dynamic values, but hopefully that
+will be added at a later stage.
+</Para>
+
+<Para>
+Examples where this library may come in handy (dynamic types, really -
+hopefully the library provided here will suffice) are: persistent
+programming, interpreters, distributed programming etc.
+</Para>
+
+<Para>
+The following operations are provided over the <Literal>Dynamic</Literal> type:
+</Para>
+
+<Para>
+
+<ProgramListing>
+data Dynamic -- abstract, instance of: Show, Typeable
+instance Show Dynamic
+
+toDyn       :: Typeable a =&#62; a -&#62; Dynamic
+fromDyn     :: Typeable a =&#62; Dynamic -&#62; a -&#62; a
+fromDynamic :: Typeable a =&#62; Dynamic -&#62; Maybe a
+</ProgramListing>
+
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ <Function>toDyn</Function> converts a value into a dynamic one, provided
+<Function>toDyn</Function> knows the (concrete) type representation of the value.
+The <Literal>Typeable</Literal> type class is used to encode this, overloading a
+function that returns the type representation of a value. More on this
+below.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ There's two ways of going from a dynamic value to one with a concrete
+type: <Function>fromDyn</Function>, tries to convert the dynamic value
+into a value with the same type as its second argument. If this fails,
+the default second argument is just
+returned. <Function>fromDynamic</Function> returns a
+<Literal>Maybe</Literal> type instead, <Literal>Nothing</Literal>
+coming back if the conversion was not possible.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+The <Literal>Dynamic</Literal> type has got a <Literal>Show</Literal> instance which returns
+a pretty printed string of the type of the dynamic value. (Useful when
+debugging).
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Sect2 id="sec-Dynamic-TypeRep">
+<Title>Representing types<IndexTerm><Primary>Representing types</Primary></IndexTerm></Title>
+
+<Para>
+Haskell types are represented as terms using the <Literal>TypeRep</Literal>
+abstract type:
+</Para>
+
+<Para>
+
+<ProgramListing>
+data TypeRep  -- abstract, instance of: Eq, Show, Typeable
+data TyCon    -- abstract, instance of: Eq, Show, Typeable
+
+mkTyCon	 :: String  -&#62; TyCon
+mkAppTy	 :: TyCon   -&#62; [TypeRep] -&#62; TypeRep
+mkFunTy  :: TypeRep -&#62; TypeRep   -&#62; TypeRep
+applyTy	 :: TypeRep -&#62; TypeRep   -&#62; Maybe TypeRep
+</ProgramListing>
+
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ <Filename>mkAppTy</Filename> applies a type constructor to a sequence of types,
+returning a type.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Filename>mkFunTy</Filename> is a special case of <Filename>mkAppTy</Filename>, applying
+the function type constructor to a pair of types.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Filename>applyTy</Filename> applies a type to a function type. If possible,
+the result type is returned.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Type constructors are represented by the abstract type,
+<Literal>TyCon</Literal>. 
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Most importantly, <Literal>TypeRep</Literal>s can be compared for equality.
+Type equality is used when converting a <Literal>Dynamic</Literal> value into a
+value of some specific type, comparing the type representation that
+the <Literal>Dynamic</Literal> value embeds with equality of the type representation
+of the type we're trying to convert the dynamically-typed value into.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ 
+To allow comparisons between <Literal>TypeRep</Literal>s to be implemented
+efficiently, the <Emphasis>abstract</Emphasis> <Literal>TyCon</Literal> type is used, with
+the constructor function <Function>mkTyCon</Function> provided:
+
+
+<ProgramListing>
+ mkTyCon :: String -&#62; TyCon 
+</ProgramListing>
+
+
+An implementation of the <Literal>Dynamic</Literal> interface guarantees the
+following,
+
+
+<ProgramListing>
+  mkTyCon "a" == mkTyCon "a"
+</ProgramListing>
+
+
+A really efficient implementation is possible if we guarantee/demand
+that the strings are unique, and for a particular type constructor,
+the application <Function>mkTyCon</Function> to the string that represents the type
+constructor is never duplicated. <Emphasis>Q:</Emphasis> <Emphasis>Would this constraint be
+unworkable in practice?</Emphasis>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Both <Literal>TyCon</Literal> and <Literal>TypeRep</Literal> are instances of the <Literal>Show</Literal> type
+classes. To have tuple types be shown in infix form, the <Literal>Show</Literal>
+instance guarantees that type constructors consisting of <Literal>n</Literal>-commas,
+i.e., (<Literal>mkTyCon ",,,,"</Literal>), is shown as an <Literal>(n+1)</Literal> tuple in infix
+form.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+<Sect2 id="sec-Dynamic-Typeable">
+<Title>The Typeable class<IndexTerm><Primary>The Typeable class</Primary></IndexTerm>
+</Title>
+
+<Para>
+To ease the construction of <Literal>Dynamic</Literal> values, we
+introduce the following type class to help working with
+<Literal>TypeRep</Literal>s:
+</Para>
+
+<Para>
+
+<ProgramListing>
+class Typeable a where
+  typeOf :: a -&#62; TypeRep
+</ProgramListing>
+
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ The <Function>typeOf</Function> function is overloaded to return the type
+representation associated with a type. 
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+<Emphasis>Important:</Emphasis> The argument to <Function>typeOf</Function> is only used to
+carry type information around so that overloading can be resolved.
+<Literal>Typeable</Literal> instances should never, ever look at this argument.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para> The <Literal>Dynamic</Literal> library provides <Literal>Typeable</Literal>
+instances for all Prelude types and all types from the <Literal>lang</Literal>
+package (given that their component types are themselves Typeable). They are:
+
+<ProgramListing>
+Prelude types: 
+   [a], (), (a,b), (a,b,c), (a,b,c,d), (a,b,c,d,e), (a-&#62;b), 
+   (Array a b), Bool, Char, (Complex a), Double, (Either a b),
+   Float, Handle, Int, Integer, (IO a), (Maybe a), Ordering
+
+Hugs/GHC types:
+   Addr, AddrOff, Dynamic, ForeignObj, (IORef a),
+   Int8, Int16, Int32, Int64, (ST s a), (StablePtr a),
+   TyCon, TypeRep, Word8, Word16, Word32, Word64
+
+GHC types:
+   ArithException, AsyncException, (ByteArray i), CChar, CClock,
+   CDouble, CFile, CFloat, CFpos, CInt, CJmpbuf, CLDouble,
+   CLLong, CLong, CPtrdiff, CSChar, CShort, CSigAtomic, CSize,
+   CTime, CUChar, CUInt, CULLong, CULong, CUShort, CWchar,
+   Exception, (IOArray i e), (IOUArray i e), (MutableByteArray s i),
+   PackedString, (STArray s i e), (STUArray s i e), (StableName a),
+   (UArray i e), (Weak a)
+</ProgramListing>
+
+Note: GHC's libraries currently contain the <literal>Typeable</literal>
+instances for the data types in the modules <literal>Exception</literal>,
+<literal>CTypes</literal>, and <literal>CTypesISO</literal> in those
+modules themselves. This is probably anyway the right way to go,
+<literal>Dynamic</literal> should only contain instances for Prelude types.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+<Sect2 id="sec-Dynamic-util">
+<Title>Utility functions<IndexTerm><Primary>Utility functions</Primary></IndexTerm></Title>
+
+<Para>
+Operations for applying a dynamic function type to a
+dynamically typed argument are commonly useful, and
+also provided:
+</Para>
+
+<Para>
+
+<ProgramListing>
+dynApply   :: Dynamic -&#62; Dynamic -&#62; Dynamic -- unsafe.
+dynApplyMb :: Dynamic -&#62; Dynamic -&#62; Maybe Dynamic
+</ProgramListing>
+
+</Para>
+
+</Sect2>
+
+</Sect1>

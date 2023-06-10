@@ -1,0 +1,17 @@
+<sect1 id="sec-Edison">
+  <title>Edison</title>
+  <indexterm><primary>Edison</primary></indexterm>
+
+  <para>Edison is a complete package of data structures for Haskell.
+  Documentation can currently be found at <ulink
+  url="http://www.cs.columbia.edu/~cdo/edison/">The Edison home
+  page</ulink>.</para>
+
+</sect1>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("../../doc/hslibs.sgml" "book" "chapter" "sect1") ***
+     ;;; End: ***
+ -->

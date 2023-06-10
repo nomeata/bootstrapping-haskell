@@ -1,0 +1,35 @@
+<Chapter id="sec-lang"><Title>The <literal>lang</literal> category: language support</Title>
+
+&addr
+&bits
+&byte
+&ccall
+&ctypes
+&ctypesiso
+&dynamic
+&exception
+&foreign
+&foreignobj
+&glaexts
+&iarray
+&int
+&ioexts
+&lazyst
+&marray
+&mutable
+&numexts
+&packed
+&showfunctions
+&st
+&stable
+&stablename
+&stableptr
+&storable
+&weak
+&word
+
+<!--<BIBLIO
+STYLE="abbrv"
+FILES="refs"> -->
+
+</Chapter>

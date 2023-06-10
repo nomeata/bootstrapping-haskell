@@ -1,0 +1,225 @@
+
+<Sect1 id="sec-stable-pointers">
+<Title><literal>StablePtr</literal><IndexTerm><Primary>Stable Pointers</Primary></IndexTerm>
+</Title>
+
+<Para>
+This module is part of the Foreign Function Interface (FFI) and will usually
+be imported via the module <Literal>Foreign</Literal> (see <XRef
+LinkEnd="sec-Foreign">).  A <Emphasis>stable pointer</Emphasis> is a reference
+to a Haskell expression that is guaranteed not to be affected by garbage
+collection, i.e., it will neither be deallocated nor will the value of the
+stable pointer itself change during garbage collection (ordinary references
+may be relocated during garbage collection).  Consequently, stable pointers
+can be passed to foreign code, which can handle it as an opaque reference to a
+Haskell value.
+</Para>
+
+<Sect2>
+  <Title>The Standard Interface</Title>
+
+<ProgramListing>
+module StablePtr where
+
+data StablePtr a   -- abstract stable reference to a Haskell value
+instance Eq StablePtr
+
+makeStablePtr   :: a           -&#62; IO (StablePtr a)
+deRefStablePtr  :: StablePtr a -&#62; IO a
+freeStablePtr   :: StablePtr a -&#62; IO ()
+stablePtrToAddr :: StablePtr a -&#62; Addr
+addrToStablePtr :: Addr        -&#62; StablePtr a
+</ProgramListing>
+<Para>
+The behaviour of the functions is as follows:
+</Para>
+<VariableList>
+
+<VarListEntry>
+<Term><Function>makeStablePtr :: a -&#62; IO (StablePtr a)</Function></Term>
+<ListItem>
+<Para>
+Creates a stable pointer referring to the given Hasell value.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>deRefStablePtr :: StablePtr a -&#62; IO a</Function></Term>
+<ListItem>
+<Para>
+Obtains the Haskell value referenced by a stable pointer, i.e., the same value
+that was passed to the corresponding call to
+<Function>makeStablePtr</Function>.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>freeStablePtr :: StablePtr a -&#62; IO ()</Function></Term>
+<ListItem>
+<Para>
+Dissolve the association between the stable pointer and the Haskell value.
+Afterwards, if the stable pointer is passed to
+<Function>deRefStablePtr</Function> or <Function>freeStablePtr</Function>, the
+behaviour is undefined.  However, the stable pointer may still be passed to
+<Function>stablePtrToAddr</Function>, but the <Literal>Addr</Literal> value
+returned by <Function>stablePtrToAddr</Function>, in this case, is undefined
+(in particular, it may be <Function>Addr.nullAddr</Function>).  Nevertheless,
+the call is guaranteed not to diverge.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>stablePtrToAddr :: StablePtr a -&#62; Addr</Function></Term>
+<ListItem>
+<Para>
+Coerces a stable pointer to an address.  No guarantees are made about the
+resulting value, except that the original stable pointer can be recovered by
+<Function>addrToStablePtr</Function>.  In particular, the address may not
+refer to a valid memory address and any attempt to pass it to the member
+functions of the class <Literal>Storable</Literal> (<XRef
+LinkEnd="sec-Storable">) will most likely lead to disaster.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>addrToStablePtr :: Addr -&#62; StablePtr a</Function></Term>
+<ListItem>
+<Para>
+The inverse of <Function>stablePtrToAddr</Function>, i.e., we have the identity
+</Para>
+<ProgramListing>
+
+  sp == addrToStablePtr (stablePtrToAddr sp)
+</ProgramListing>
+<Para>
+for any stable pointer <Literal>sp</Literal> on which
+<Function>freeStablePtr</Function> has <Emphasis>not</Emphasis> been executed
+yet.
+</Para>
+</ListItem>
+</VarListEntry>
+
+</VariableList>
+
+<Para>
+Care must be taken to free stable pointers that are no longer required using
+the function <Function>freeStablePtr</Function>; otherwise, two bad things can
+happen:
+</Para>
+<ItemizedList>
+
+<ListItem>
+<Para>
+The object referenced by the stable pointer will be retained in the heap.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+The runtime system's internal stable pointer table will grow, which imposes an
+overhead on garbage collection.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Sect2>
+
+
+<Sect2>
+  <Title>The Standard C-side Interface</Title>
+
+<Para>
+The following definition is available to C programs inter-operating with
+Haskell code when including the header <Literal>HsFFI.h</Literal>.
+</Para>
+<ProgramListing>
+typedef void* HsStablePtr;  /* C representation of a StablePtr */
+</ProgramListing>
+<Para>
+Note that no assumptions may be made about the values representing stable
+pointer.  In fact, they need not even be valid memory addresses.  The only
+guarantee provided is that if they are passed back to Haskell land, the
+function <Function>deRefStablePtr</Function> will be able to reconstruct the
+Haskell value refereed to by the stable pointer.
+</Para>
+
+</Sect2>
+
+
+<Sect2>
+  <Title>Deprecated Functions</Title>
+
+<Para>
+The following functions are deprecated in the new FFI and the assertions
+regarding the equality of stable pointers are <Emphasis>not</Emphasis>
+guaranteed.  Do <Emphasis>not</Emphasis> use the following functions if you
+are interested in portability.  Most of these functions are here for legacy
+reasons and may just vanish one day.  You have been warned.
+</Para>
+
+<Para>
+Notes:
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+If <Literal>sp1 :: StablePtr</Literal> and <Literal>sp2 :: StablePtr</Literal> and <Literal>sp1
+== sp2</Literal> then <VarName>sp1</VarName> and <VarName>sp2</VarName> are either the same stable pointer,
+or they were created by calls to <Function>makeStablePtr</Function> on the same
+object.  Another way to say this is "every time you call
+<Function>makeStablePtr</Function> on an object you get back the same stable pointer".
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ The reverse is not necessarily true: if two stable pointers are
+not equal, it doesn't mean that they don't refer to the same Haskell
+object (although they probably don't).  
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+The C interface (which is brought into scope by <Literal>&num;include
+&lt;Stable.h&gt;</Literal>) is as follows:
+</Para>
+
+<Para>
+
+<ProgramListing>
+typedef StablePtr /* abstract, probably an unsigned long */
+extern StgPtr         deRefStablePtr(StgStablePtr stable_ptr);
+static void           freeStablePtr(StgStablePtr sp);
+static StgStablePtr   splitStablePtr(StgStablePtr sp);
+</ProgramListing>
+
+</Para>
+
+<Para>
+The functions <Function>deRefStablePtr</Function> and <Function>freeStablePtr</Function> are
+equivalent to the Haskell functions of the same name above.  
+</Para>
+
+<Para>
+The function <Function>splitStablePtr</Function> allows a stable pointer to be
+duplicated without making a new one with <Function>makeStablePtr</Function>.  The
+stable pointer won't be removed from the runtime system's internal
+table until <Function>freeStablePtr</Function> is called on both pointers.
+</Para>
+
+</Sect2>
+
+</Sect1>

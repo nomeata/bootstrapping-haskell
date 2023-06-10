@@ -1,0 +1,657 @@
+<Chapter id="sec-Concurrent">
+<Title>The <literal>concurrent</literal> category: concurrency support
+<IndexTerm><Primary>Concurrent Haskell</Primary></IndexTerm>
+</Title>
+
+<Sect1 id="sec-Concurrent-Haskell">
+<Title>Concurrent Haskell<IndexTerm><Primary>Concurrent Haskell</Primary></IndexTerm>
+</Title>
+
+<Para>
+GHC and Hugs both provide concurrency extensions, as described in
+<ULink
+URL="http://www.haskell.org/ghc/docs/papers/concurrent-haskell.ps.gz"
+>Concurrent Haskell</ULink>.
+</Para>
+
+<Para>
+Concurrency in GHC and Hugs is "lightweight", which means that both
+thread creation and context switching overheads are extremely low.
+Scheduling of Haskell threads is done internally in the Haskell
+runtime system, and doesn't make use of any operating system-supplied
+thread packages.
+</Para>
+
+<Para>
+Haskell threads can communicate via <Literal>MVar</Literal>s, a kind
+of synchronised mutable variable (see <XRef LinkEnd="sec-MVars">).
+Several common concurrency abstractions can be built from
+<Literal>MVar</Literal>s, and these are provided by the
+<Literal>Concurrent</Literal> library, which is described in the later
+sections.  Threads may also communicate via exceptions.
+</Para>
+
+</Sect1>
+
+<Sect1 id="sec-Concurrency-Basics">
+<Title>Concurrency Basics
+<IndexTerm><Primary>Concurrency Basics</Primary></IndexTerm>
+</Title>
+
+<Para>
+To gain access to the concurrency primitives, just <Literal>import
+Concurrent</Literal> in your Haskell module.  In GHC, you also need to
+add the <Option>-syslib concurrent</Option> option to the command
+line.
+</Para>
+
+<Para>
+To create a new thread, use <Function>forkIO</Function>:
+</Para>
+
+<Para>
+
+<Screen>
+forkIO :: IO () -&gt; IO ThreadId
+</Screen>
+
+</Para>
+
+<Para>
+This sparks off a new thread to run the <Literal>IO</Literal>
+computation passed as the first argument.
+</Para>
+
+<Para>
+The returned <Literal>ThreadId</Literal> is an abstract type
+representing a handle to the newly created thread.  The
+<Literal>ThreadId</Literal> type is an instance of both
+<Literal>Eq</Literal> and <Literal>Ord</Literal>, where the
+<Literal>Ord</Literal> instance implements an arbitrary total ordering
+over <Literal>ThreadId</Literal>s.
+</Para>
+
+<Para>
+Threads may also be killed via the <Literal>ThreadId</Literal>:
+</Para>
+
+<Para>
+
+<Screen>
+killThread :: ThreadId -&gt; IO ()
+</Screen>
+
+</Para>
+
+<Para>
+this terminates the given thread (Note: <Function>killThread</Function> is not
+implemented in Hugs yet).  Any work already done by the thread isn't
+lost: the computation is suspended until required by another thread.
+The memory used by the thread will be garbage collected if it isn't
+referenced from anywhere else.
+</Para>
+
+<Para>
+More generally, an arbitrary exception (see <XRef
+LinkEnd="sec-Exception">) may be raised in any thread for which we
+have a <Literal>ThreadId</Literal>, with
+<Function>raiseInThread</Function>:
+</Para>
+
+<Para>
+
+<Screen>
+raiseInThread :: ThreadId -&gt; Exception -&gt; IO ()
+</Screen>
+
+</Para>
+
+<Para>
+Actually <Function>killThread</Function> just raises the
+<Literal>ThreadKilled</Literal> exception in the target thread, the
+normal action of which is to just terminate the thread.  The target
+thread will stop whatever it was doing (even if it was blocked on an
+<Literal>MVar</Literal> or other computation) and handle the
+exception.
+</Para>
+
+<Para>
+One important property of <Function>raiseInThread</Function> (and
+therefore <Function>killThread</Function>) is that they are
+<Emphasis>synchronous</Emphasis>, in the sense that after performing a
+<Function>raiseInThread</Function> operation, the calling thread can
+be certain that the target thread has received the exception.  In
+other words, the target thread cannot perform any more processing
+unless it handles the exception that has just been raised in it.  This
+is a useful property to know when dealing with race conditions: eg. if
+there are two threads that can kill each other, it is guaranteed that
+only one of the threads will get to kill the other.
+</Para>
+
+<Para>
+The <Literal>ThreadId</Literal> for the current thread can be obtained with
+<Function>myThreadId</Function>:
+</Para>
+
+<Para>
+
+<Screen>
+myThreadId :: IO ThreadId
+</Screen>
+
+</Para>
+
+<Para>
+NOTE: if you have a <Literal>ThreadId</Literal>, you essentially have a pointer to the
+thread itself.  This means the thread itself can't be garbage
+collected until you drop the <Literal>ThreadId</Literal>.  This misfeature will
+hopefully be corrected at a later date.
+</Para>
+
+</Sect1>
+
+<Sect1 id="sec-scheduling">
+<Title>Scheduling</Title>
+
+<Para>
+GHC uses <Emphasis>preemptive multitasking</Emphasis>: context switches can occur
+at any time.  At present, Hugs uses <Emphasis>cooperative multitasking</Emphasis>:
+context switches only occur when you use one of the primitives defined
+in this module.  This means that programs such as:
+</Para>
+
+<Para>
+
+<Screen>
+main = forkIO (write 'a') &gt;&gt; write 'b'
+ where write c = putChar c &gt;&gt; write c
+</Screen>
+
+</Para>
+
+<Para>
+will print either <Literal>aaaaaaaaaaaaaa...</Literal> or
+<Literal>bbbbbbbbbbbb...</Literal>, instead of some random
+interleaving of <Literal>a</Literal>s and <Literal>b</Literal>s.  In
+practice, cooperative multitasking is sufficient for writing simple
+graphical user interfaces.
+</Para>
+
+<Para>
+The <Function>yield</Function> action forces a context-switch to any other
+currently runnable threads (if any), and is occasionally useful when
+implementing concurrency abstractions:
+</Para>
+
+<Para>
+
+<Screen>
+yield :: IO ()
+</Screen>
+
+</Para>
+
+<Sect2>
+<Title>Thread Waiting<IndexTerm><Primary>Thread Waiting</Primary></IndexTerm></Title>
+
+<Para>
+There are operations to delay a concurrent thread, and to make one
+wait: <IndexTerm><Primary>delay a concurrent
+thread</Primary></IndexTerm><IndexTerm><Primary>wait for a file
+descriptor</Primary></IndexTerm>
+</Para>
+
+<Para>
+
+<Screen>
+threadDelay     :: Int -&gt; IO ()
+threadWaitRead  :: Int -&gt; IO ()
+threadWaitWrite :: Int -&gt; IO ()
+</Screen>
+
+</Para>
+
+<Para>
+The <Function>threadDelay</Function> operation will cause the current thread to
+suspend for a given number of microseconds.  Note that the resolution
+used by the Haskell runtime system's internal timer together with the
+fact that the thread may take some time to be rescheduled after the
+time has expired, means that the accuracy is more like 1/50 second.
+</Para>
+
+<Para>
+<Function>threadWaitRead</Function> and <Function>threadWaitWrite</Function> can be used to block a
+thread until I/O is available on a given file descriptor.  These
+primitives are used by the I/O subsystem to ensure that a thread
+waiting on I/O doesn't hang the entire system.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Blocking<IndexTerm><Primary>Blocking</Primary></IndexTerm></Title>
+
+<Para>
+Calling a foreign C procedure (such as <Function>getchar</Function>) that blocks
+waiting for input will block <Emphasis>all</Emphasis> threads, in both
+GHC and Hugs.  The GHC I/O system uses non-blocking I/O internally to implement
+thread-friendly I/O, so calling standard Haskell I/O functions blocks
+only the thead making the call.
+</Para>
+
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="sec-Concurrency-abstractions">
+<Title>Concurrency abstractions
+<IndexTerm><Primary>Concurrency abstractions</Primary></IndexTerm>
+</Title>
+
+<Sect2 id="sec-Channels">
+<Title><Literal>Chan</Literal>: Channels
+<IndexTerm><Primary>Channels</Primary></IndexTerm>
+</Title>
+
+<Para>
+A <Literal>Channel</Literal> is an unbounded channel:
+</Para>
+
+<Para>
+
+<Screen>
+data Chan a 
+newChan         :: IO (Chan a)
+writeChan       :: Chan a -&gt; a -&gt; IO ()
+readChan        :: Chan a -&gt; IO a
+dupChan         :: Chan a -&gt; IO (Chan a)
+unGetChan       :: Chan a -&gt; a -&gt; IO ()
+getChanContents :: Chan a -&gt; IO [a]
+writeList2Chan	:: Chan a -&gt; [a] -&gt; IO ()
+</Screen>
+
+</Para>
+
+</Sect2>
+
+<Sect2 id="sec-CVars">
+<Title><Literal>CVar</Literal>: Channel variables<IndexTerm>
+<Primary>Channel variables</Primary></IndexTerm>
+</Title>
+
+<Para>
+A <Emphasis>channel variable</Emphasis> (<Literal>CVar</Literal>) is a one-element channel, as
+described in the paper:
+</Para>
+
+<Para>
+
+<Screen>
+data CVar a
+newCVar :: IO (CVar a)
+putCVar :: CVar a -&gt; a -&gt; IO ()
+getCVar :: CVar a -&gt; IO a
+</Screen>
+
+</Para>
+
+</Sect2>
+
+<Sect2 id="sec-MVars">
+<Title><Literal>MVar</Literal>: Synchronising variables
+<IndexTerm><Primary>MVars</Primary></IndexTerm>
+</Title>
+
+<IndexTerm><Primary>synchronising variables</Primary></IndexTerm>
+
+<Para> The <Literal>MVar</Literal> interface provides access to
+&ldquo;MVars&rdquo; (pronounced &ldquo;em-vars&rdquo;), which are
+<Emphasis>synchronising variables</Emphasis>.  An
+<Literal>MVar</Literal> is simply a box, which may be empty or full.
+The basic operations available over <literal>MVar</literal>s are given
+below:
+</para>
+
+<Para>
+<IndexTerm><Primary><literal>MVar</literal> type</Primary></IndexTerm>
+<IndexTerm><Primary><literal>newMVar</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>takeMVar</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>putMVar</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>readMVar</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>swapMVar</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>tryTakeMVar</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>isEmptyMVar</literal></Primary></IndexTerm>
+<Screen>
+data MVar a -- abstract
+instance Eq (MVar a)
+
+newEmptyMVar     :: IO (MVar a)
+newMVar          :: a -&gt; IO (MVar a)
+takeMVar         :: MVar a -&gt; IO a
+putMVar          :: MVar a -&gt; a -&gt; IO ()
+readMVar         :: MVar a -&gt; IO a
+swapMVar         :: MVar a -&gt; a -&gt; IO a
+tryTakeMVar      :: MVar a -&gt; IO (Maybe a)
+isEmptyMVar      :: MVar a -&gt; IO Bool
+</Screen>
+</Para>
+
+<variablelist>
+
+<varlistentry>
+<term><literal>newEmptyMVar</literal></term>
+<term><literal>newMVar</literal></term>
+<listitem><para>
+New empty <literal>MVar</literal>s can be created with
+<literal>newEmptyMVar</literal>.  To create an <literal>MVar</literal>
+with an initial value, use <literal>newMVar</literal>.
+</para></listitem>
+</varlistentry>
+
+<varlistentry>
+<term><literal>takeMVar</literal></term>
+<listitem><para>
+The <literal>takeMVar</literal>
+operation returns the contents of the <literal>MVar</literal> if it
+was full, or waits until it becomes full otherwise.
+</para></listitem>
+</varlistentry>
+
+<varlistentry>
+<term><literal>putMVar</literal></term>
+<listitem> <para> The <literal>putMVar</literal> operation puts a value into an
+empty <literal>MVar</literal>.  Calling <literal>putMVar</literal> on
+an already full <literal>MVar</literal> results in a
+<literal>PutFullMVar</literal> exception being raised (see <xref
+linkend="sec-Exception">).
+</para></listitem>
+</varlistentry>
+
+<varlistentry id="tryTakeMVar">
+<term><literal>tryTakeMVar</literal></term>
+<listitem><para>
+The <literal>tryTakeMVar</literal> is a non-blocking version of
+<literal>takeMVar</literal>.  If the <literal>MVar</literal> is full,
+then it returns <literal>Just a</literal> (where <literal>a</literal>
+is the contents of the <literal>MVar</literal>) and empties the
+<literal>MVar</literal>.  If the <literal>MVar</literal> is empty, it
+immediately returns <literal>Nothing</literal>.
+</para></listitem>
+</varlistentry>
+
+<varlistentry>
+<term><literal>isEmptyMVar</literal></term>
+<listitem><para>
+The operation <Function>isEmptyMVar</Function> returns a flag indicating
+whether the <Literal>MVar</Literal> is currently empty or filled in, i.e.,
+will a thread block when performing a <Function>takeMVar</Function> on that
+<Literal>MVar</Literal> or not?
+</Para>
+<Para>
+Please notice that the Boolean value returned from
+<Function>isEmptyMVar</Function> represent just a snapshot of the
+state of the <Literal>MVar</Literal>. By the time a thread gets to
+inspect the result and act upon it, other threads may have accessed
+the <Literal>MVar</Literal> and changed the 'filled-in' status of the
+variable.  The same proviso applies to
+<Function>isEmptyChan</Function> (next sub-section).
+</para></listitem>
+</varlistentry>
+
+<varlistentry>
+<term><literal>readMVar</literal></term>
+<listitem><para>
+This is a combination of <literal>takeMVar</literal> and
+<literal>putMVar</literal>; ie. it takes the value from the
+<literal>MVar</literal>, puts it back, and also returns it.
+</para></listitem>
+</varlistentry>
+
+<varlistentry>
+<term><literal>swapMVar</literal></term>
+<listitem><para>
+<literal>swapMVar</literal> swaps the contents of an
+<literal>MVar</literal> for a new value.
+</para></listitem>
+</varlistentry>
+</variablelist>
+
+</Sect2>
+
+<Sect2 id="sec-General-Semaphores">
+<Title><Literal>QSem</Literal>: General semaphores
+<IndexTerm><Primary>General semaphores</Primary></IndexTerm>
+</Title>
+
+<Para>
+<Screen>
+data QSem
+newQSem     :: Int   -&gt; IO QSem
+waitQSem    :: QSem  -&gt; IO ()
+signalQSem  :: QSem  -&gt; IO ()
+</Screen>
+</Para>
+
+</Sect2>
+
+<Sect2 id="sec-Quantity-Semaphores">
+<Title><Literal>QSemN</Literal>: Quantity semaphores
+<IndexTerm><Primary>Quantity semaphores</Primary></IndexTerm>
+</Title>
+
+<Para>
+<Screen>
+data QSemN
+newQSemN    :: Int   -&gt; IO QSemN
+signalQSemN :: QSemN -&gt; Int -&gt; IO ()
+waitQSemN   :: QSemN -&gt; Int -&gt; IO ()
+</Screen>
+</Para>
+
+</Sect2>
+
+<Sect2 id="sec-Sample-Variables">
+<Title><Literal>SampleVar</Literal>: Sample variables
+<IndexTerm><Primary>Sample variables</Primary></IndexTerm>
+</Title>
+
+<Para>
+A <Emphasis>sample variable</Emphasis> (<Literal>SampleVar</Literal>) is slightly different from a
+normal <Literal>MVar</Literal>:
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ Reading an empty <Literal>SampleVar</Literal> causes the reader to block
+(same as <Function>takeMVar</Function> on empty <Literal>MVar</Literal>).
+</Para>
+</ListItem>
+<ListItem>
+
+<Para> Reading a filled <Literal>SampleVar</Literal> empties it and
+returns value. (same as <Function>takeMVar</Function>)
+</Para>
+</ListItem>
+<ListItem>
+
+<Para> Writing to an empty <Literal>SampleVar</Literal> fills it with
+a value, and potentially, wakes up a blocked reader  (same as for
+<Function>putMVar</Function> on empty <Literal>MVar</Literal>).
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Writing to a filled <Literal>SampleVar</Literal> overwrites the current value.
+(different from <Function>putMVar</Function> on full <Literal>MVar</Literal>.)
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+
+<Screen>
+type SampleVar a = MVar (Int, MVar a)
+
+emptySampleVar :: SampleVar a -&gt; IO ()
+newSampleVar   :: IO (SampleVar a)
+readSample     :: SampleVar a -&gt; IO a
+writeSample    :: SampleVar a -&gt; a -&gt; IO ()
+</Screen>
+
+</Para>
+
+</Sect2>
+
+<Sect2 id="sec-Merging-Streams">
+<Title>Merging Streams<IndexTerm><Primary>Merging Streams</Primary></IndexTerm></Title>
+
+<Para>
+Merging streams---binary and n-ary:
+</Para>
+
+<Para>
+
+<Screen>
+mergeIO  :: [a]   -&gt; [a] -&gt; IO [a]
+nmergeIO :: [[a]] -&gt; IO [a]
+</Screen>
+
+</Para>
+
+<Para>
+These actions fork one thread for each input list that concurrently
+evaluates that list; the results are merged into a single output list.
+</Para>
+
+<Para>
+Note: Hugs does not provide the functions <Function>mergeIO</Function> or
+<Function>nmergeIO</Function> since these require preemptive multitasking.
+</Para>
+
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="sec-concurrent-libiface">
+<Title>The <Literal>Concurrent</Literal> library interface</Title>
+
+<Para>
+The full interface for the <Literal>Concurrent</Literal> library is given below for
+reference:
+</Para>
+
+<Para>
+
+<Screen>
+data ThreadId    -- thread identifiers
+instance Eq  ThreadId
+instance Ord ThreadId
+
+forkIO           :: IO () -&gt; IO ThreadId
+myThreadId       :: IO ThreadId
+killThread       :: ThreadId -&gt; IO ()
+par              :: a -&gt; b -&gt; b
+seq              :: a -&gt; b -&gt; b
+fork             :: a -&gt; b -&gt; b
+yield            :: IO ()
+
+threadDelay      :: Int -&gt; IO ()
+threadWaitRead   :: Int -&gt; IO ()
+threadWaitWrite  :: Int -&gt; IO ()
+
+mergeIO	         :: [a]   -&gt; [a] -&gt; IO [a]
+nmergeIO	 :: [[a]] -&gt;y IO [a]
+
+module Chan
+module CVar
+module MVar
+module QSem
+module QSemN
+module SampleVar
+</Screen>
+
+</Para>
+
+</Sect1>
+
+<Sect1 id="sec-ghc-concurrency">
+<Title>GHC-specific concurrency issues</Title>
+
+<Para>
+In a standalone GHC program, only the main thread is required to
+terminate in order for the process to terminate.  Thus all other
+forked threads will simply terminate at the same time as the main
+thread (the terminology for this kind of behaviour is ``daemonic
+threads'').
+</Para>
+
+<Para>
+If you want the program to wait for child threads to finish before
+exiting, you need to program this yourself.  A simple mechanism is to
+have each child thread write to an <Literal>MVar</Literal> when it completes, and
+have the main thread wait on all the <Literal>MVar</Literal>s before exiting:
+</Para>
+
+<Para>
+
+<Screen>
+myForkIO :: IO () -&gt; IO (MVar ())
+myForkIO io = do
+  mvar &#60;- newEmptyMVar
+  forkIO (io `finally` putMVar mvar ())
+  return mvar
+</Screen>
+
+</Para>
+
+<Para>
+Note that we use <Function>finally</Function> from the <Literal>Exception</Literal> module to make
+sure that the <Literal>MVar</Literal> is written to even if the thread dies or is
+killed for some reason.
+</Para>
+
+<Para>
+A better method is to keep a global list of all child threads which we
+should wait for at the end of the program:
+</Para>
+
+<Para>
+
+<Screen>
+children :: MVar [MVar ()]
+children = unsafePerformIO (newMVar [])
+
+waitForChildren :: IO ()
+waitForChildren = do
+  (mvar:mvars) &#60;- takeMVar children
+  putMVar children mvars
+  takeMVar mvar
+  waitForChildren
+
+forkChild :: IO () -&gt; IO ()
+forkChild io = do
+   mvar &#60;- newEmptyMVar
+   forkIO (p `finally` putMVar mvar ())
+   childs &#60;- takeMVar children
+   putMVar children (mvar:childs)
+
+later = flip finally
+
+main =
+  later waitForChildren $
+  ...
+</Screen>
+
+</Para>
+
+</Sect1>
+
+</Chapter>

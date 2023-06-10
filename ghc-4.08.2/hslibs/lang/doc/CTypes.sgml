@@ -1,0 +1,65 @@
+<Sect1 id="sec-CTypes">
+<Title><literal>CTypes</literal><IndexTerm><Primary>CTypes</Primary></IndexTerm>
+</Title>
+
+<Para>
+This module is part of the language-dependent part of the Foreign Function
+Interface (FFI) - for the language-independent part, see <XRef LinkEnd="sec-Foreign">.
+It defines Haskell types that can hold the primitive types of C and
+can directly be used in foreign import and export declarations.
+</Para>
+
+<Para>
+Every type has a constructor of the same name, which is currently
+exported, too. Given the large set of instances for each type, it is
+not clear if access to the concrete representation is really necessary.
+Some experience is needed before a final decision can be made in this respect.
+</Para>
+
+<Sect2 id="sec-CTypes-Integral">
+<Title>Integral types<IndexTerm><Primary>Integral types</Primary></IndexTerm></Title>
+
+<Para>
+The following integral types have instances for the classes
+<Literal>Eq</Literal>, <Literal>Ord</Literal>, <Literal>Num</Literal>,
+<Literal>Read</Literal>, <Literal>Show</Literal>,
+<Literal>Enum</Literal>, <Literal>Typeable</Literal>,
+<Literal>Storable</Literal>, <Literal>Bounded</Literal>,
+<Literal>Real</Literal>, <Literal>Integral</Literal>, and
+<Literal>Bits</Literal>:
+</Para>
+<ProgramListing>
+newtype CChar		-- char
+newtype CSChar		-- signed char
+newtype CUChar		-- unsigned char
+newtype CShort		-- short
+newtype CUShort		-- unsigned short
+newtype CInt		-- int
+newtype CUInt		-- unsigned int
+newtype CLong		-- long
+newtype CULong		-- unsigned long
+newtype CLLong		-- long long
+newtype CULLong		-- unsigned long long
+</ProgramListing>
+</Sect2>
+
+<Sect2 id="sec-CTypes-Floating">
+<Title>Floating types<IndexTerm><Primary>Floating types</Primary></IndexTerm></Title>
+
+<Para>
+The following floating types have instances for the classes
+<Literal>Eq</Literal>, <Literal>Ord</Literal>, <Literal>Num</Literal>,
+<Literal>Read</Literal>, <Literal>Show</Literal>,
+<Literal>Enum</Literal>, <Literal>Typeable</Literal>,
+<Literal>Storable</Literal>, <Literal>Real</Literal>,
+<Literal>Fractional</Literal>, <Literal>Floating</Literal>,
+<Literal>RealFrac</Literal>, and <Literal>RealFloat</Literal>:
+</Para>
+<ProgramListing>
+newtype CFloat		-- float
+newtype CDouble		-- double
+newtype CLDouble	-- long double
+</ProgramListing>
+</Sect2>
+
+</Sect1>

@@ -1,0 +1,19 @@
+<BookInfo>
+<Title>The Glasgow Haskell Compiler User's Guide, Version 4.08</Title>
+<Author><OtherName>The GHC Team</OtherName></Author>
+<Address>
+<Email>glasgow-haskell-&lcub;bugs,users&rcub;-request@haskell.org</Email>
+</Address>
+</BookInfo>
+
+&license
+&intro
+&installing
+&using
+&prof
+&sooner
+&lang-features
+&ffi-chap
+&wrong
+&utils
+&win32-dll

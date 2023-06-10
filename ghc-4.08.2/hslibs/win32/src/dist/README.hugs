@@ -1,0 +1,26 @@
+Directions for how to install a binary distribution
+of the win32 libraries on top of an existing hugs
+installation:
+
++Alternative 1:
+  * Unpack this distribution somewhere on your
+    local machine.
+  * Start up Hugs and adjust its load path to
+    pick up the new version of the Win32 libs, e.g.,
+   
+    Prelude> :set
+    ....
+    Current settings: +fewui -stgl.qk -h100000 -p"%s> " -r$$
+    Search path     : -P{Hugs}\lib;{Hugs}\lib\hugs;{Hugs}\lib\exts;{Hugs}\lib\win32
+    Editor setting  : -E"c:\\windows\notepad.exe"
+    Preprocessor    : -F
+    Prelude> :set -P{Hugs}\lib;{Hugs}\lib\hugs;{Hugs}\lib\exts;\path\to\where\you\unpacked\win32
+
++Alternative 2:
+  * Locate the directory where you have got Hugs
+    installed locally.
+  * Rename the directory {Hugs}\lib\win32 to
+    {Hugs}\lib\win32-old (i.e., move it out of the way.)
+  * Unzip the contents of this distribution into
+    {Hugs}\lib\win32.
+

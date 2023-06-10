@@ -1,0 +1,89 @@
+<Sect1 id="Regex">
+<Title><Literal>Regex</Literal>: The low-level regex matching interface
+</Title>
+
+<Para>
+<IndexTerm><Primary>Regex library (misc syslib)</Primary></IndexTerm>
+<IndexTerm><Primary>regular-expressions library</Primary></IndexTerm>
+</Para>
+
+<Para>
+(Sigbjorn Finne supplied the regular-expressions interface.)
+</Para>
+
+<Para>
+The <Literal>Regex</Literal> library provides quite direct interface
+to the GNU regular-expression library, for doing manipulation on
+<Literal>PackedString</Literal>s (<XRef LinkEnd="PackedString">). You
+probably need to see the GNU documentation if you are operating at
+this level. Alternatively, you can use the simpler and higher-level
+<Literal>RegexString</Literal> (<XRef LinkEnd="RegexString">)
+interface.
+</Para>
+
+<Para>
+The datatypes and functions that <Literal>Regex</Literal> provides are:
+
+<ProgramListing>
+data PatBuffer  # just a bunch of bytes (mutable)
+
+data REmatch
+ = REmatch (Array Int GroupBounds)  -- for $1, ... $n
+           GroupBounds              -- for $` (everything before match)
+           GroupBounds              -- for $&amp; (entire matched string)
+           GroupBounds              -- for $' (everything after)
+           GroupBounds              -- for $+ (matched by last bracket)
+
+-- GroupBounds hold the interval where a group
+-- matched inside a string, e.g.
+--
+-- matching "reg(exp)" "a regexp" returns the pair (5,7) for the
+-- (exp) group. (PackedString indices start from 0)
+
+type GroupBounds = (Int, Int)
+
+re_compile_pattern
+        :: PackedString         -- pattern to compile
+        -&#62; Bool                 -- True &#60;=&#62; assume single-line mode
+        -&#62; Bool                 -- True &#60;=&#62; case-insensitive
+        -&#62; IO PatBuffer
+
+re_match :: PatBuffer           -- compiled regexp
+         -&#62; PackedString        -- string to match
+         -&#62; Int                 -- start position
+         -&#62; Bool                -- True &#60;=&#62; record results in registers
+         -&#62; IO (Maybe REmatch)
+
+-- Matching on 2 strings is useful when you're dealing with multiple
+-- buffers, which is something that could prove useful for
+-- PackedStrings, as we don't want to stuff the contents of a file
+-- into one massive heap chunk, but load (smaller chunks) on demand.
+
+re_match2 :: PatBuffer          -- 2-string version
+          -&#62; PackedString
+          -&#62; PackedString
+          -&#62; Int
+          -&#62; Int
+          -&#62; Bool
+          -&#62; IO (Maybe REmatch)
+
+re_search :: PatBuffer          -- compiled regexp
+          -&#62; PackedString       -- string to search
+          -&#62; Int                -- start index
+          -&#62; Int                -- stop index
+          -&#62; Bool               -- True &#60;=&#62; record results in registers
+          -&#62; IO (Maybe REmatch)
+
+re_search2 :: PatBuffer         -- Double buffer search
+           -&#62; PackedString
+           -&#62; PackedString
+           -&#62; Int               -- start index
+           -&#62; Int               -- range (?)
+           -&#62; Int               -- stop index
+           -&#62; Bool              -- True &#60;=&#62; results in registers
+           -&#62; IO (Maybe REmatch)
+</ProgramListing>
+
+</Para>
+
+</Sect1>

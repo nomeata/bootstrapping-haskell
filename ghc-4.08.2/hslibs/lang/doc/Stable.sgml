@@ -1,0 +1,12 @@
+
+<Sect1 id="sec-Stable">
+<Title><literal>Stable</literal><IndexTerm><Primary>Stable</Primary></IndexTerm>
+</Title>
+
+<Para>
+This module is deprecated, use either
+<literal>StablePtr</literal> (see <XRef LinkEnd="sec-stable-pointers">) or
+<literal>StableName</literal> (see <XRef LinkEnd="sec-stable-names">).
+</Para>
+
+</Sect1>

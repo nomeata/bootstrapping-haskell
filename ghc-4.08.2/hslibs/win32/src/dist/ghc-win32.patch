@@ -1,0 +1,39 @@
+*** ghc.prl.~1~	Wed Feb 04 19:53:35 1998
+--- ghc.prl	Wed Mar 04 16:42:38 1998
+***************
+*** 2538,2542 ****
+      push(@SysLibrary, "-lHS$syslib");
+      push(@SysLibrary, "-lHS${syslib}_cbits")
+!           unless $syslib eq 'contrib'; #HACK! it has no cbits
+  }
+  
+--- 2538,2542 ----
+      push(@SysLibrary, "-lHS$syslib");
+      push(@SysLibrary, "-lHS${syslib}_cbits")
+!           unless $syslib =~ /^(contrib|win32)$/; #HACK! have no cbits
+  }
+  
+***************
+*** 2883,2887 ****
+      /^-syslib(.*)/  && do { local($syslib) = &grab_arg_arg(*Args,'-syslib',$1);
+  			    print STDERR "$Pgm: no such system library (-syslib): $syslib\n",
+! 			      $Status++ unless $syslib =~ /^(hbc|ghc|posix|contrib)$/;
+  
+  			    #
+--- 2883,2887 ----
+      /^-syslib(.*)/  && do { local($syslib) = &grab_arg_arg(*Args,'-syslib',$1);
+  			    print STDERR "$Pgm: no such system library (-syslib): $syslib\n",
+! 			      $Status++ unless $syslib =~ /^(hbc|ghc|posix|contrib|win32)$/;
+  
+  			    #
+***************
+*** 2899,2902 ****
+--- 2899,2906 ----
+  				# needed for Berkeley socket/nwork stuff.
+  				push(@SysLibrary, '-lnsl');
++ 			    } elsif ( $syslib eq 'win32' && 
++ 				      $TargetPlatform =~ /-cygwin32$/ ) {
++ 				# needed for Berkeley socket/nwork stuff.
++ 				push(@SysLibrary, '-luser32 -lgdi32');
+  			    }
+  			    next arg; };

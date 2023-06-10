@@ -1,0 +1,80 @@
+This is the INSTALL instructions for a binary bundle of the
+Glorious Glasgow Haskell Compilation System. For more details
+on what on earth this package is up to, please consult the README
+and ANNOUNCE.
+
+To start using the bundle, you can either:
+
+* use it in-place, i.e., don't go ahead with a
+  full install, but just set it up to use the unpacked
+  distribution in-situ.
+
+* get it over with, and do the full install (details of how are ahead).
+
+NOTE Win32 users: see comment below before continuing.
+
+To set the ball rolling, run the configure script (as usual, run
+the script with --help to see what options it supports).
+
+This will figure out what platform you're running on, and a couple of other
+interesting pieces of trivia, which it will then fill in the Makefile.in
+template to give you a real Makefile. 
+
+[Win32 users: don't be alarmed if you should encounter the following
+ message from the configure script:
+  
+      not updating unwritable cache ./config.cache
+
+This is a known problem of generated autoconf configure scripts running
+on cygwin, but harmless (it only means you get to re-do all the configure
+tests should you decide to re-run the script.)
+]
+
+Have a look at the Makefile to see if you agree with the information
+therein. If you want to use the bundle in-place, now run `make in-place'.
+If you're installing, `make install' (`make show-install-setup' prints
+the details of where the different pieces of the bundle are heading when
+-- possibly helpful).
+
+For more information, please consult the installation guide in
+{html,dvi,info}/ghc-<version>/installing{.dvi,.info,_toc.html}.
+
+Bug reports/suggestions for improvement to the installation procedure/setup
+(as well as other GHC related troubles you're experiencing, of course),
+gratefully received at glasgow-haskell-bugs@dcs.gla.ac.uk
+
+Enjoy.
+
+
+-------Win32 users only----------------------------------------
+NOTE to Win32 users: to enjoy any sort of happiness with the GHC
+tools, you will have to install the cygwin toolchain, which dresses
+up the Win32 environment into something more UNIX-like (which
+this initial port of ghc relies on being the case). The cygwin tools
+are available from
+
+    http://sourceware.cygnus.com/cygwin/
+
+GHC was built with beta20.1 of the cygwin tools and depends on it
+to work.
+
+Install cygwin before continuing. Couple of things to remember
+doing while installing these two:
+
+  - Create a toplevel /bin directory, and copy bash.exe into it
+    as sh.exe (we'll need this for running the configure script.)
+    Add /bin to your PATH.
+  - Create a toplevel /tmp directory.
+
+Additionally, ghc requires perl to operate, so included in the
+binary distribution is a perl binary, (perl.exe in the toplevel
+directory.) Install (as in copy :-) this somewhere along your
+PATH too (/bin is a good choice.)
+
+This is hardly beatiful, but it avoids having to download and install
+yet another package, including piles of (useful) perl libraries that the
+ghc perl code does not require to operate. Besides which, there's a
+dearth of readily useable perl distributions 'out there' that contain
+cygwin-compiled binaries, something we really do depend on.
+
+-------Win32 users only----------------------------------------

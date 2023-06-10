@@ -1,0 +1,99 @@
+<Sect1 id="BSD">
+<Title><Literal>BSD</Literal>: System database info
+<IndexTerm><Primary>BSD</Primary></IndexTerm>
+</Title>
+
+<Para> The <Literal>BSD</Literal> module provides functions to get at
+system-database info; pretty straightforward if you're into this sort
+of thing:
+
+<ProgramListing>
+type HostName         = String
+
+getHostName          :: IO Hostname
+
+data ServiceEntry = ServiceEntry  {
+   serviceName       :: ServiceName,   -- Official Name
+   serviceAliases    :: [ServiceName], -- aliases
+   servicePort       :: PortNumber,    -- Port Number (network byte order)
+   serviceProtocol   :: ProtocolName   -- Protocol
+ }
+type ServiceName      = String
+
+getServiceByName     :: ServiceName -&#62; ProtocolName -&#62; IO ServiceEntry
+getServiceByPort     :: PortNumber  -&#62; ProtocolName -&#62; IO ServiceEntry
+getServicePortNumber :: ServiceName -&#62; IO PortNumber
+
+-- not available con Cygwin/Mingw
+getServiceEntry      :: IO ServiceEntry
+setServiceEntry      :: Bool -&#62; IO ()
+endServiceEntry      :: IO ()
+getServiceEntries    :: Bool -&#62; IO [ServiceEntry]
+
+type ProtocolName     = String
+type ProtocolNumber   = Int   -- from SocketPrim
+
+data ProtocolEntry = ProtocolEntry  {
+     protoName       :: ProtocolName,   -- Official Name
+     protoAliases    :: [ProtocolName], -- aliases
+     protoNumber     :: ProtocolNumber  -- Protocol Number
+ }
+
+getProtocolByName    :: ProtocolName   -&#62; IO ProtocolEntry
+getProtocolByNumber  :: ProtocolNumber -&#62; IO ProtcolEntry
+getProtocolNumber    :: ProtocolName   -&#62; ProtocolNumber
+
+ -- not available con Cygwin/Mingw
+setProtocolEntry     :: Bool -&#62; IO ()
+getProtocolEntry     :: IO ProtocolEntry
+endProtocolEntry     :: IO ()
+getProtocolEntries   :: Bool -&#62; IO [ProtocolEntry]
+
+-- from SocketPrim
+newtype PortNumber    = -- instance of Eq, Ord, Enum, Num, Real, Integral, Show
+   PNum Int             -- 16-bit value stored in network byte order.
+mkPortNumber         :: Int -&#62; PortNumber
+
+data HostEntry = HostEntry {
+     hostName        :: HostName,     -- Official Name
+     hostAliases     :: [HostName],   -- aliases
+     hostFamily      :: Family,       -- Host Type (currently AF_INET)
+     hostAddresses   :: [HostAddress] -- Set of Network Addresses  (in network byte order)
+ }
+
+getHostByName        :: HostName -&#62; IO HostEntry
+getHostByAddr        :: HostAddress -&#62; Family -&#62; IO HostEntry
+hostAddress          :: HostEntry -&#62; HostAddress
+
+-- not available con Cygwin/Mingw
+setHostEntry         :: Bool -&#62; IO ()
+getHostEntry         :: IO HostEntry
+endHostEntry         :: IO ()
+getHostEntries       :: Bool -&#62; IO [HostEntry]
+
+type NetworkAddr      = Word -- host byte order
+type NetworkName      = String
+
+data NetworkEntry =
+  NetworkEntry {
+     networkName     :: NetworkName,   -- official name
+     networkAliases  :: [NetworkName], -- aliases
+     networkFamily   :: Family,        -- type
+     networkAddress  :: NetworkAddr
+   }
+
+-- not available con Cygwin/Mingw
+getNetworkByName     :: NetworkName -&#62; IO NetworkEntry
+getNetworkByAddr     :: NetworkAddr -&#62; Family -&#62; IO NetworkEntry
+setNetworkEntry      :: Bool -&#62; IO ()
+getNetworkEntry      :: IO NetworkEntry
+endNetworkEntry      :: IO ()
+getNetworkEntries    :: Bool -&#62; IO [NetworkEntry]
+
+-- if available
+symlink              :: String -&#62; String -&#62; IO ()
+readlink             :: String -&#62; IO String
+</ProgramListing>
+</Para>
+
+</Sect1>

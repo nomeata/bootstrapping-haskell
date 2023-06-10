@@ -1,0 +1,10 @@
+<Chapter id="sec-text"><Title>The <literal>text</literal> category: text manipulation</Title>
+
+&haxml
+&matchps
+&parsec
+&pretty
+&regex
+&regexstring
+
+</Chapter>

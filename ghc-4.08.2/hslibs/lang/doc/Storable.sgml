@@ -1,0 +1,243 @@
+<Sect1 id="sec-Storable">
+<Title><literal>Storable</literal><IndexTerm><Primary>Storable</Primary></IndexTerm>
+</Title>
+
+<Para>
+The module <Literal>Storable</Literal> provides most elementary support for
+marshalling and is part of the low-level portion of the Foreign Function
+Interface (FFI) - see also <XRef LinkEnd="sec-Foreign">.  It serves two
+functions:
+<OrderedList>
+
+<ListItem>
+<Para>
+It provides operations to allocate and deallocate blocks of <Emphasis>raw
+memory</Emphasis> (i.e., unstructured chunks of memory outside of the area
+maintained by the Haskell storage manager).  These
+memory blocks are commonly used to pass compound data structures to foreign
+functions or to provide space in which compound result values are obtained from
+foreign functions.  For example, Haskell lists are typically passed as
+C arrays to C functions; the storage space for such an array can be
+allocated by functions (such as <Function>malloc</Function>) contained in the
+present module.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+It provides a class <Literal>Storable</Literal> and instances of this class
+for all primitive types that can be stored in raw memory.  The member
+functions of this class facilitate writing values of primitive types to raw
+memory (which may have been allocated with the above mentioned routines) and
+reading values from blocks of raw memory.  The class, furthermore, includes
+support for computing the storage requirements and alignment restrictions of
+storable types. 
+</Para>
+</ListItem>
+
+</OrderedList>
+</Para>
+
+<Sect2>
+  <Title>The Type Class <literal>Storable</literal></Title>
+
+<Para>
+All marshalling between Haskell and a foreign language ultimately boils down
+to translating Haskell data structures into the binary representation of a
+corresponding data structure of the foreign language and vice versa.  To code
+this marshalling in Haskell, it is necessary to manipulate primtive data types
+stored in unstructured memory blocks.  The class <literal>Storable</literal>
+facilitates this manipulation on all types for which it is instantiated, which
+are the standard basic types of Haskell, the fixed size
+<literal>IntXX</literal> (<XRef LinkEnd="sec-Int">) and
+<literal>WordXX</literal> (<XRef LinkEnd="sec-Word">) types,
+stable pointers (<XRef LinkEnd="sec-stable-pointers">),
+all types from <literal>CTypes</literal> (<XRef LinkEnd="sec-CTypes">)
+and <literal>CTypesISO</literal> (<XRef LinkEnd="sec-CTypesISO">),
+as well as addresses (<XRef LinkEnd="sec-Addr">).
+</Para>
+<IndexTerm><Primary><literal>Storable</literal> class</Primary></IndexTerm>
+<IndexTerm><Primary><literal>sizeOf</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>alignment</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>peekElemOff</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>pokeElemOff</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>peekByteOff</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>pokeByteOff</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>peek</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>poke</literal></Primary></IndexTerm>
+<ProgramListing>
+class Storable a where
+  sizeOf      :: a -&#62; Int
+  alignment   :: a -&#62; Int
+
+  peekElemOff :: Addr -&#62; Int          -&#62; IO a
+  pokeElemOff :: Addr -&#62; Int     -&#62; a -&#62; IO ()
+
+  peekByteOff :: Addr -&#62; AddrOff      -&#62; IO a
+  pokeByteOff :: Addr -&#62; AddrOff -&#62; a -&#62; IO ()
+
+  peek        :: Addr                 -&#62; IO a
+  poke        :: Addr            -&#62; a -&#62; IO ()
+</ProgramListing>
+<Para>
+The behaviour of the member functions is as follows:
+</Para>
+<VariableList>
+
+<VarListEntry>
+<Term><Function>sizeOf :: a -&#62; Int</Function></Term>
+<Term><Literal>alignment :: a -&#62; Int</Literal></Term>
+<ListItem>
+<Para>
+The function <Literal>sizeOf</Literal> computes the storage requirements (in
+bytes) of the argument, and <Literal>alignment</Literal> computes the
+alignment constraint of the argument.  An alignment constraint
+<VarName>x</VarName> is fulfilled by any address divisible by
+<VarName>x</VarName>.  Both functions <Emphasis>do not evaluate</Emphasis>
+their argument, but compute the result on the basis of the type of the
+argument alone. 
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>peekElemOff :: Addr -&#62; Int -&#62; IO a</Function></Term>
+<ListItem>
+<Para>
+Read a value from a memory area regarded as an array of values of the same
+kind.  The first argument specifies the start address of the array and the
+second the index into the array (the first element of the array has index
+<Literal>0</Literal>).  The following equality holds,
+</Para>
+<ProgramListing>
+  peekElemOff addr idx = IOExts.fixIO $ \result -&#62;
+    let off = fromIntegral (idx * sizeOf result)
+    in peek (addr `plusAddr` off)
+</ProgramListing>
+<Para>
+Note that this is only a specification, but not necessarily the concrete
+implementation of the function.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>pokeElemOff :: Addr -&#62; Int -&#62; a -&#62; IO ()</Function></Term>
+<ListItem>
+<Para>
+Write a value to a memory area regarded as an array of values of the same
+kind.  The following equality holds,
+</Para>
+<ProgramListing>
+  pokeElemOff addr idx x = 
+    let off = fromIntegral (idx * sizeOf x)
+    in poke (addr `plusAddr` off) x
+</ProgramListing>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>peekByteOff :: Addr -&#62; AddrOff -&#62; IO a</Function></Term>
+<ListItem>
+<Para>
+Read a value from a memory location given by a base address and offset.  The
+following equality holds, 
+</Para>
+<ProgramListing>
+  peekByteOff addr off = peek (addr `plusAddr` off)
+</ProgramListing>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>pokeByteOff :: Addr -&#62; AddrOff -&#62; a -&#62; IO ()</Function></Term>
+<ListItem>
+<Para>
+Write a value to a memory location given by a base address and offset.  The
+following equality holds, 
+</Para>
+<ProgramListing>
+  pokeByteOff addr off x = poke (addr `plusAddr` off) x
+</ProgramListing>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>peek :: Addr -&#62; IO a</Function></Term>
+<ListItem>
+<Para>
+Read a value from the given memory location
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>poke :: Addr -&#62; a -&#62; IO ()</Function></Term>
+<ListItem>
+<Para>
+Write the given value to the given memory location.
+</Para>
+</ListItem>
+</VarListEntry>
+
+</VariableList>
+<Para>
+Note that the peek and poke functions might require properly aligned addresses
+to function correctly.  This is architecture dependent; thus, portable code
+should ensure that when peeking or poking values of some type
+<Literal>a</Literal>, the alignment constraint for <Literal>a</Literal>, as
+given by the function <Literal>alignment</Literal> is fulfilled.
+</Para>
+
+</Sect2>
+
+
+<Sect2>
+  <Title>Allocation and Deallocation of Memory Blocks</Title>
+
+<ProgramListing>
+malloc      ::               Int         -&#62; IO Addr
+mallocElem  :: Storable a =&#62; a           -&#62; IO Addr
+mallocElems :: Storable a =&#62; a    -&#62; Int -&#62; IO Addr
+realloc     ::               Addr -&#62; Int -&#62; IO Addr
+free        ::               Addr        -&#62; IO ()
+
+alloca	    ::               Int      -&#62; (Addr -&#62; IO a) -&#62; IO a
+allocaElem  :: Storable a =&#62; a        -&#62; (Addr -&#62; IO b) -&#62; IO b
+allocaElems :: Storable a =&#62; a -&#62; Int -&#62; (Addr -&#62; IO b) -&#62; IO b
+</ProgramListing>
+<Para>
+The functions <Function>malloc</Function>, <Function>realloc</Function>, and
+<Function>free</Function> correspond to the standard C functions
+<Literal>malloc()</Literal>, <Literal>realloc()</Literal>, and
+<Literal>free()</Literal>, respectively.  The function
+<Function>mallocElem</Function> essentially behaves like
+<Function>malloc</Function>, but allocates a block of memory that exactly
+holds values of its argument type.  The function
+<Function>mallocElems</Function> is similar, but allocates storage for an
+array of values, where the size of the array is given in the second argument.
+More precisely, these last two functions behave as if defined as follows:
+</Para>
+<ProgramListing>
+mallocElem      = malloc . sizeOf
+mallocElems x n = malloc (n * sizeOf x)
+</ProgramListing>
+<Para>
+Note that, due to the definition of <Literal>sizeOf</Literal>, the first
+argument of both <Function>mallocElem</Function> and
+<Function>mallocElems</Function> is not evaluated.
+</Para>
+
+<Para>
+The remaining three functions sandwich a given operation between
+allocation and deallocation of one block of memory in an
+exception-safe way.  They behave as if defined as
+</Para>
+<ProgramListing>
+alloca        n op = bracket (malloc n) free op
+allocaElem  x   op = alloca (sizeOf x)     op
+allocaElems x n op = alloca (n * sizeOf x) op
+</ProgramListing>
+</Sect2>
+
+</sect1>

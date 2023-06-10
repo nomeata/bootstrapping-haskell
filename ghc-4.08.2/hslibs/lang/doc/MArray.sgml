@@ -1,0 +1,159 @@
+<sect1 id="sec-MArray">
+  <title><literal>MArray</literal></title>
+  <indexterm><primary>MArray</primary><secondary>module</secondary></indexterm>
+  
+  <para> The <literal>MArray</literal> module provides a class of
+  mutable arrays, parameterised over the array type, element type and
+  the monad in which the array can be used:</para>
+
+<screen>
+  class (Monad m, HasBounds a) => MArray a e m where
+     get     :: Ix ix => a ix e -> ix -> m e
+     put     :: Ix ix => a ix e -> ix -> e -> m ()
+     marray  :: Ix ix => (ix,ix) -> m (a ix e)
+</screen>
+
+  <para>The <literal>get</literal> and <literal>put</literal>
+  operations allow for reading and writing to/from the array, and
+  <literal>marray</literal> is used for building a new array.  All
+  indices in the newly created array will contain undefined
+  elements.</para>
+
+  <para>The <literal>IOArray</literal> (<xref linkend="sec-IOArray">)
+  and <literal>STArray</literal> (<xref linkend="sec-ST">) types are
+  both instances of <literal>MArray</literal>:</para>
+
+<screen>
+data STArray s ix e
+instance HasBounds (STArray s)
+instance MArray (STArray s) e (ST s)
+
+data IOArray ix e
+instance HasBounds IOArray
+instance MArray IOArray e IO
+</screen>
+
+  <para>There are also strict unboxed versions of
+  <literal>IOArray</literal> and <literal>STArray</literal>, namely
+  <literal>IOUArray</literal> <literal>STUArray</literal> and
+  instances of <literal>MArray</literal> for these types with common
+  integral element types:</para>
+
+<screen>
+data STUArray s ix e
+instance HasBounds (STUArray s)
+instance MArray (STArray s) Char      (ST s)
+instance MArray (STArray s) Int       (ST s)
+instance MArray (STArray s) Word      (ST s)
+instance MArray (STArray s) Addr      (ST s)
+instance MArray (STArray s) Float     (ST s)
+instance MArray (STArray s) Double    (ST s)
+instance MArray (STArray s) StablePtr (ST s)
+
+data IOUArray ix e
+instance HasBounds IOUArray
+instance MArray IOArray Char      IO
+instance MArray IOArray Int       IO
+instance MArray IOArray Word      IO
+instance MArray IOArray Addr      IO
+instance MArray IOArray Float     IO
+instance MArray IOArray Double    IO
+instance MArray IOArray StablePtr IO
+</screen>
+
+
+  <sect2>
+    <title>Freezing and thawing arrays</title>
+    <indexterm><primary>freezing arrays</primary></indexterm>
+    <indexterm><primary>thawing arrays</primary></indexterm>
+
+    <para>An <literal>MArray</literal> can be converted into an
+    <literal>IArray</literal> (<xref linkend="sec-IArray">), by
+    <firstterm>freezing</firstterm> it:</para>
+
+<screen>
+  freeze :: (Ix ix, MArray a e m, IArray b e) => a ix e -> m (b ix e)
+</screen>
+<indexterm><primary><literal>freeze</literal></primary>
+      </indexterm>
+
+    <para>The <literal>IArray</literal> returned is independent of the
+    original <literal>MArray</literal>, so further modifications to
+    the mutable version won't affect the frozen one.  The usual
+    implementation of <literal>freeze</literal> is to make a copy of
+    the array.</para>
+
+    <para>In many cases, the additional copy is unnecessary, for
+    example when freezing is the last operation on the mutable version
+    of the array.  For these cases, an unsafe version of
+    <literal>freeze</literal> is provided which may not
+    copy<footnote><para>The default implementation of
+    <literal>unsafeFreeze</literal> is <literal>freeze</literal>, but
+    it is expected that specialised versions which omit the copy are
+    provided for the common array types.</para></footnote> the
+    array:</para>
+
+<screen>
+  unsafeFreeze :: (Ix ix, MArray a e m, IArray b e) => a ix e -> m (b ix e)
+</screen>
+<indexterm><primary><literal>unsafeFreeze</literal></primary></indexterm>
+
+    <para>The dual to <literal>freeze</literal> is
+    <literal>thaw</literal>, which converts an
+    <literal>IArray</literal> into an <literal>MArray</literal>:</para>
+
+<screen>
+  thaw :: (Ix ix, IArray a e, MArray b e m) => a ix e -> m (b ix e)
+</screen>
+<indexterm><primary><literal>thaw</literal></primary></indexterm>
+
+    <para>As with <literal>freeze</literal>, <literal>thaw</literal>
+    needs to make a copy of the array.  For the cases when you know
+    the copy is unnecessary, we also provide
+    <literal>unsafeThaw</literal>:</para>
+
+<screen>
+  unsafeThaw :: (Ix ix, IArray a e, MArray b e m) => a ix e -> m (b ix e)
+</screen>
+<indexterm><primary><literal>unsafeThaw</literal></primary></indexterm>
+
+  </sect2>
+
+  <sect2>
+    <title>Useful combinators</title>
+
+    <para><literal>MArray</literal> also provides versions of the
+    following standard array combinators.  Note that they have
+    slightly different types from the versions in
+    <literal>Array</literal> and <literal>IArray</literal>, mostly to
+    accomodate the requirement that an <literal>MArray</literal> must
+    be used within a monad:</para>
+
+<screen>
+assocs    :: (Ix ix, MArray a e m) => a ix e -> m [(ix,e)]
+
+indices   :: (Ix ix, IArray a e) => a ix e -> [ix]
+
+(//)      :: (Ix ix, MArray a e m) => a ix e -> [(ix,e)] -> m ()
+
+amap      :: (Ix ix, MArray a x m, MArray a y m) => 
+                (x->y) -> a ix x -> m (a ix y)
+
+listArray :: (Ix ix, MArray a e m) => (ix,ix) -> [e] -> m (a ix e)
+	  
+elems     :: (Ix ix, MArray a e m) => a ix e -> m [e]
+	  
+ixmap     :: (Ix ix, Ix iy, MArray a e m) => 
+	  	   (ix,ix) -> (ix->iy) -> a iy e -> m (a ix e)
+
+</screen>
+
+  </sect2>
+</sect1>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("../../doc/hslibs.sgml" "book" "chapter" "sect1") ***
+     ;;; End: ***
+ -->

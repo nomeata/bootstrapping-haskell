@@ -1,0 +1,55 @@
+<!DOCTYPE Article PUBLIC "-//OASIS//DTD DocBook V3.1//EN">
+
+<Article>
+
+<ArtHeader>
+
+<Title>Adding libraries to hslibs</Title>
+<Author><OtherName>The GHC Team</OtherName></Author>
+<Address><Email>glasgow-haskell-&lcub;users,bugs&rcub;@dcs.gla.ac.uk</Email></Address>
+<PubDate>January 2000</PubDate>
+
+</ArtHeader>
+
+
+<Sect1><Title>How to add documentation for a library</Title>
+
+<Para>
+The main <Filename>hslibs</Filename> directory contains a subdirectory for each set of libraries. Each subdirectory should contain a <Filename>doc</Filename> subdirectory. The main documentation file should be called <Filename>lib.html</Filename> where <Filename>lib</Filename> is the name of the library directory.
+</Para>
+
+<Para>
+To add documentation for a library to the main library manual, some new lines must be spliced into the top-level file <Filename>hslibs/doc/hslibs.sgml</Filename>. First, the library directory needs a line in the list of directories at the top of the file, of the form
+</Para>
+
+<ProgramListing>
+&lt;!ENTITY text SYSTEM "../text/doc/lib.sgml" &gt;
+</ProgramListing>
+
+<Para>
+Next, if the documentation for the library is split up over several files, a new section needs to be added to the bottom of the DTD declaration of <Filename>hslibs.sgml</Filename>, along the lines of
+</Para>
+
+<ProgramListing>
+&lt;!-- lib --&gt;
+        &lt;!ENTITY sub1            SYSTEM "../lib/doc/sub1.sgml"&gt;
+        &lt;!ENTITY sub2            SYSTEM "../lib/doc/sub2.sgml"&gt;
+        ...
+</ProgramListing>
+
+<Para>
+Finally, the library needs to be referenced by its entity name in the body of <Filename>hslibs.sgml</Filename>, as <Literal>&amp;lib</Literal>.
+</Para>
+
+</Sect1>
+
+
+<Sect1><Title>A template for library documentation</Title>
+
+<Para>
+At the moment, there is no standard form for libraries' documentation. The only requirement is that each should be a chapter: that is, the main file <Filename>lib.sgml</Filename> should not have a DTD line at the top, but start with <SGMLTag class="starttag">Chapter</SGMLTag> and end with <SGMLTag class="endtag">Chapter</SGMLTag>.
+</Para>
+
+</Sect1>
+
+</Article>

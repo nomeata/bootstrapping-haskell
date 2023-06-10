@@ -1,0 +1,615 @@
+
+<Sect1 id="sec-Exception">
+  <Title><literal>Exception</literal><IndexTerm><Primary>Exception</Primary></IndexTerm> </Title>
+
+  <Para>The Exception library provides an interface for raising and
+  catching both built-in and user defined exceptions.</Para>
+
+  <Para>Exceptions are defined by the following (non-abstract)
+  datatype:</Para>
+
+  <Para>
+
+<ProgramListing>
+-- instance of Eq, Ord, Show, Typeable
+data Exception
+  = IOException 	IOError		-- IO exceptions (from 'ioError')
+  | ArithException  	ArithException	-- Arithmetic exceptions
+  | ArrayException	ArrayException  -- Array-related exceptions
+  | ErrorCall		String		-- Calls to 'error'
+  | NoMethodError       String		-- A non-existent method was invoked
+  | PatternMatchFail	String		-- A pattern match failed
+  | RecSelError		String		-- Selecting a non-existent field
+  | RecConError		String		-- Field missing in record construction
+  | RecUpdError		String		-- Record doesn't contain updated field
+  | AssertionFailed	String		-- Assertions
+  | DynException	Dynamic		-- Dynamic exceptions
+  | AsyncException	AsyncException	-- Externally generated errors
+  | PutFullMVar 			-- Put on a full MVar
+  | BlockedOnDeadMVar			-- Blocking on a dead MVar
+  | NonTermination
+
+-- instance of Eq, Ord, Show, Typeable
+data ArithException
+  = Overflow
+  | Underflow
+  | LossOfPrecision
+  | DivideByZero
+  | Denormal
+
+-- instance of Eq, Ord, Show, Typeable
+data AsyncException
+  = StackOverflow
+  | HeapOverflow
+  | ThreadKilled
+
+-- instance of Eq, Ord, Show, Typeable
+data ArrayException
+  = IndexOutOfBounds  	String		-- out-of-range array access
+  | UndefinedElement	String		-- evaluating an undefined element
+</ProgramListing>
+
+</Para>
+  
+  <sect2>
+    <title>Kinds of exception</title>
+
+    <Para>An implementation should raise the appropriate exception
+    when once of the following conditions arises:</Para>
+
+    <variablelist>
+      <varlistentry>
+	<term><literal>IOException</literal></term>
+	<listitem>
+	  <para>These are the standard IO exceptions from Haskell's
+  	  <literal>IO</literal> monad.  IO Exceptions are raised by
+  	  <literal>IO.ioError</literal>.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>ArithException</literal></term>
+	<listitem>
+	  <para>Exceptions raised by arithmetic
+	  operations<footnote><para>GHC currently does not throw
+	  <literal>ArithException</literal>s.</para></footnote>:</para>
+	  <variablelist>
+	    <varlistentry>
+	      <term><literal>Overflow</literal></term>
+	      <listitem>
+		<para></para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>Underflow</literal></term>
+	      <listitem>
+		<para></para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>LossOfPrecision</literal></term>
+	      <listitem>
+		<para></para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>DivisionByZero</literal></term>
+	      <listitem>
+		<para></para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>Denormal</literal></term>
+	      <listitem>
+		<para></para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</listitem>
+      </varlistentry>
+      
+      <varlistentry>
+	<term><literal>ArrayException</literal></term>
+	<listitem>
+	  <para>Exceptions raised by array-related
+	  operations<footnote><para>GHC currently does not throw
+	  <literal>ArrayException</literal>s.</para></footnote>:</para>
+	  <variablelist>
+	    <varlistentry>
+	      <term><literal>IndexOutOfBounds</literal></term>
+	      <listitem>
+		<para>An attempt was made to index an array outside
+	        its declared bounds.</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>UndefinedElement</literal></term>
+	      <listitem>
+		<para>An attempt was made to evaluate an element of an
+	        array that had not been initialized.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>ErrorCall</literal></term>
+	<listitem>
+	  <para>The <literal>ErrorCall</literal> exception is thrown
+	  by <literal>error</literal>.  The <literal>String</literal>
+	  argument of <literal>ErrorCall</literal> is the string
+	  passed to <literal>error</literal> when it was
+	  called.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>NoMethodError</literal></term>
+	<listitem>
+	  <para>An attempt was made to invoke a class method which has
+	  no definition in this instance, and there was no default
+	  definition given in the class declaration.  GHC issues a
+	  warning when you compile an instance which has missing
+	  methods.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>PatternMatchFail</literal></term>
+	<listitem>
+	  <para>A pattern matching failure.  The
+	  <literal>String</literal> argument should contain a
+	  descriptive message including the function name, source file
+	  and line number.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>RecSelError</literal></term>
+	<listitem>
+	  <para>A field selection was attempted on a constructor that
+	  doesn't have the requested field.  This can happen with
+	  multi-constructor records when one or more fields are
+	  missing from some of the constructors.  The
+	  <literal>String</literal> argument gives the location of the
+	  record selection in the source program.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>RecConError</literal></term>
+	<listitem>
+	  <para>An attempt was made to evaluate a field of a record
+	  for which no value was given at construction time.  The
+	  <literal>String</literal> argument gives the location of the
+	  record construction in the source program.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>RecUpdError</literal></term>
+	<listitem>
+	  <para>An attempt was made to update a field in a record,
+	  where the record doesn't have the requested field.  This can
+	  only occur with multi-constructor records, when one or more
+	  fields are missing from some of the constructors.  The
+	  <literal>String</literal> argument gives the location of the
+	  record update in the source program.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>AssertionFailed</literal></term>
+	<listitem>
+	  <para>This exception is thrown by the
+	  <literal>assert</literal> operation when the condition
+	  fails.  The <literal>String</literal> argument contains the
+	  location of the assertion in the source program.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>DynException</literal></term>
+	<listitem>
+	  <para>Dynamically typed exceptions, described in <xref
+	      linkend="sec-Dynamic-Exceptions">.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>AsyncException</literal></term>
+	<listitem>
+	  <para>Asynchronous exceptions.  These are described in more
+	  detail in <xref linkend="sec-Asynchronous-Exceptions">.  The
+	  types of asynchronous exception are:</para>
+	  <variablelist>
+	    <varlistentry>
+	      <term><literal>StackOverflow</literal></term>
+	      <listitem>
+		<para>The current thread's stack exceeded its limit.
+	        Since an exception has been raised, the thread's stack
+	        will certainly be below its limit again, but the
+	        programmer should take remedial action
+	        immediately.</para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>HeapOverflow</literal></term>
+	      <listitem>
+		<para>The program's heap is reaching its limit, and
+	        the program should take action to reduce the amount of
+	        live data it has<footnote><para>Which thread receives
+	        this exception is currently
+	        undefined.</para></footnote><footnote><para>GHC
+	        currently does not throw
+	        <literal>HeapOverflow</literal>
+	        exceptions.</para></footnote>.
+	      </para>
+	      </listitem>
+	    </varlistentry>
+	    <varlistentry>
+	      <term><literal>ThreadKilled</literal></term>
+	      <listitem>
+		<para>This exception is raised by another thread
+	        calling <literal>killThread</literal> (see <xref
+	        linkend="sec-Concurrency-Basics">), or by the system
+	        if it needs to terminate the thread for some
+	        reason.</para>
+	      </listitem>
+	    </varlistentry>
+	  </variablelist>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry id="PutFullMVar">
+	<term><literal>PutFullMVar</literal></term>
+	<listitem>
+	  <para>A call to <literal>putMVar</literal> (<xref
+	      linkend="sec-MVars">) was passed a full <literal>MVar
+	</literal>.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry id="BlockedOnDeadMVar">
+	<term><literal>BlockedOnDeadMVar</literal></term>
+	<listitem>
+	  <para>The current thread was executing a call to
+	  <literal>takeMVar</literal> (<xref linkend="sec-MVars">)
+	  that could never return, because there are no other
+	  references to this <literal>MVar</literal>.</para>
+	</listitem>
+      </varlistentry>
+
+      <varlistentry>
+	<term><literal>NonTermination</literal></term>
+	<listitem>
+	  <para>The current thread is stuck in an infinite loop.  This
+	  exception may or may not be thrown when the program is
+	  non-terminating.</para>
+	</listitem>
+      </varlistentry>
+    </variablelist>
+
+  </sect2>
+
+  <sect2>
+    <title>Throwing exceptions</title>
+    <indexterm><primary>throwing exceptions</primary>
+    </indexterm>
+    <Para>Exceptions may be thrown explicitly from anywhere:</Para>
+
+<ProgramListing>
+throw :: Exception -&#62; a
+</ProgramListing>
+    <indexterm><primary><literal>throw</literal></primary>
+    </indexterm>
+
+  </sect2>
+  <Sect2>
+    <Title>The <Function>try</Function> functions</Title>
+
+    <Para>There are several functions for catching and examining
+    exceptions; all of them may only be used from within the
+    <Literal>IO</Literal> monad.  Firstly the <Function>try</Function>
+    family of functions:</Para>
+
+<ProgramListing>
+tryAll    :: a    -&#62; IO (Either Exception a)
+tryAllIO  :: IO a -&#62; IO (Either Exception a)
+try	  :: (Exception -&#62; Maybe b) -&#62; a    -&#62; IO (Either b a)
+tryIO	  :: (Exception -&#62; Maybe b) -&#62; IO a -&#62; IO (Either b a)
+</ProgramListing>
+
+    <Para>The simplest version is <Function>tryAll</Function>.  It
+    takes a single argument, evaluates it (as if you'd applied
+    <Function>seq</Function> to it), and returns either <Literal>Right
+    a</Literal> if the evaluation succeeded with result
+    <Literal>a</Literal>, or <Literal>Left e</Literal> if an exception
+    was raised, where <Literal>e</Literal> is the exception.  Note
+    that due to Haskell's unspecified evaluation order, an expression
+    may return one of several possible exceptions: consider the
+    expression <Literal>error "urk" + 1 `div` 0</Literal>.  Does
+    <Function>tryAll</Function> return <Literal>Just (ErrorCall
+    "urk")</Literal> or <Literal>Just (ArithError
+    DivideByZero)</Literal>?  The answer is "either":
+    <Function>tryAll</Function> makes a non-deterministic choice about
+    which exception to return.  If you call it again, you might get a
+    different exception back.  This is ok, because
+    <Function>tryAll</Function> is an IO computation.</Para>
+
+    <Para><Function>tryAllIO</Function> is the same as
+    <Function>tryAll</Function> except that the argument to evaluate
+    is an <Literal>IO</Literal> computation.  Don't try to use
+    <Function>tryAll</Function> to catch exceptions in
+    <Literal>IO</Literal> computations: in GHC an expression of type
+    <Literal>IO a</Literal> is in fact a function, so evaluating it
+    does nothing at all (and therefore raises no exceptions).  Hence
+    the need for <Function>tryAllIO</Function>, which runs
+    <Literal>IO</Literal> computations properly.</Para>
+
+    <Para>The functions <Function>try</Function> and
+    <Function>tryIO</Function> take an extra argument which is an
+    <Emphasis>exception predicate</Emphasis>, a function which selects
+    which type of exceptions we're interested in.  The full set of
+    exception predicates is given below:</Para>
+
+<ProgramListing>
+justIoErrors		:: Exception -&#62; Maybe IOError
+justArithExceptions 	:: Exception -&#62; Maybe ArithException
+justErrors		:: Exception -&#62; Maybe String
+justDynExceptions	:: Exception -&#62; Maybe Dynamic
+justAssertions		:: Exception -&#62; Maybe String
+justAsyncExceptions 	:: Exception -&#62; Maybe AsyncException
+</ProgramListing>
+
+    <Para>For example, to catch just calls to 'error' we could use
+    something like</Para>
+
+<ProgramListing>
+    result &#60;- try justErrors thing_to_try
+</ProgramListing>
+
+    <Para>Any other exceptions which aren't matched by the predicate
+    are re-raised, and may be caught by an enclosing
+    <Function>try</Function> or <Function>catch</Function>.</Para>
+
+  </Sect2>
+
+  <Sect2>
+    <Title>The <Function>catch</Function> functions</Title>
+
+    <Para>The <Function>catch</Function> family is similar to the
+    <Function>try</Function> family:</Para>
+
+<ProgramListing>
+catchAll   :: a    -&#62; (Exception -&#62; IO a) -&#62; IO a
+catchAllIO :: IO a -&#62; (Exception -&#62; IO a) -&#62; IO a
+catch      :: (Exception -&#62; Maybe b) -&#62; a    -&#62; (b -&#62; IO a) -&#62; IO a
+catchIO    :: (Exception -&#62; Maybe b) -&#62; IO a -&#62; (b -&#62; IO a) -&#62; IO a
+</ProgramListing>
+
+    <Para>The difference is that instead of returning an
+    <Literal>Either</Literal> type as the result, the
+    <Function>catch</Function> functions take a
+    <Emphasis>handler</Emphasis> argument which is invoked in the case
+    that an exception was raised while evaluating the first argument.</Para>
+
+    <Para><Function>catch</Function> and <Function>catchIO</Function>
+    take exception predicate arguments in the same way as
+    <Function>try</Function> and <Function>tryIO</Function>.</Para>
+
+    <Para>Note that <Literal>catchIO justIoErrors</Literal> is
+    identical to <Function>IO.catch</Function>.  In fact, the
+    implementation of <Literal>IO</Literal> errors in GHC uses
+    exceptions "under the hood".</Para>
+
+    <Para>Also, don't forget to <Literal>import Prelude hiding
+    (catch)</Literal> when using this library, to avoid the name clash
+    between <Function>Exception.catch</Function> and
+    <Function>IO.catch</Function>.</Para>
+
+  </Sect2>
+
+  <Sect2 id="sec-Dynamic-Exceptions">
+    <Title>Dynamic Exceptions<IndexTerm><Primary>Dynamic Exceptions</Primary></IndexTerm></Title>
+
+    <Para>Because the <Literal>Exception</Literal> datatype isn't
+    extensible, we added an interface for throwing and catching
+    exceptions of type <Literal>Dynamic</Literal> (see <XRef
+    LinkEnd="sec-Dynamic">), which allows exception values of any type
+    in the <Literal>Typeable</Literal> class to be thrown and caught.</Para>
+
+<ProgramListing>
+throwDyn :: Typeable exception =&#62; exception -&#62; b
+catchDyn :: Typeable exception =&#62; IO a -&#62; (exception -&#62; IO a) -&#62; IO a
+</ProgramListing>
+
+    <Para>The <Function>catchDyn</Function> function only catches
+    exceptions of the required type; all other exceptions are
+    re-thrown as with <Function>catchIO</Function> and friends
+    above.</Para>
+
+  </Sect2>
+
+  <Sect2>
+    <Title>Other Utilities</Title>
+
+    <Para>The <Function>bracket</Function> functions are useful for
+    making sure that resources are released properly by code that may
+    raise exceptions:</Para>
+
+<ProgramListing>
+	bracket  	:: IO a -&#62; (a -&#62; IO b) -&#62; (a -&#62; IO c) -&#62; IO c
+	bracket_ 	:: IO a -&#62; IO b -&#62; IO c -&#62; IO c
+	finally		:: IO a -&#62; IO b -&#62; IO b
+</ProgramListing>
+
+    <Para>For example, to open a file, do some work on it and then
+    close it again, we might use something like:</Para>
+
+<ProgramListing>
+process_file =
+  bracket
+     (openFile "filename" ReadMode)
+     (closeFile)
+     (do { ... })
+</ProgramListing>
+
+    <Para><Function>bracket</Function> works as follows: it executes
+    its first argument ("open"), then its third argument, followed
+    finally by its second argument ("close").  If the third argument
+    happened to raise an exception, then the close operation will
+    still be performed, and the exception will be re-raised.</Para>
+
+    <Para>This means that in the example above the file will always be
+    closed, even if an error occurs during processing.</Para>
+
+    <Para>The arguments to <Function>bracket</Function> are in this
+    order so that we can partially apply it, like:</Para>
+
+<ProgramListing>
+withFile name = bracket (openFile name) closeFile
+</ProgramListing>
+
+    <Para>The <Function>bracket&lowbar;</Function> function is a
+    variant of <Function>bracket</Function> that throws away the
+    result of the open, and <Function>finally</Function> is an even
+    simpler version where we just want some closing code.</Para>
+
+  </Sect2>
+  
+  <sect2 id="sec-Asynchronous-Exceptions">
+    <title>Asynchronous exceptions</title>
+    <indexterm><primary>exceptions</primary><secondary>asynchronous</secondary>
+    </indexterm>
+    <indexterm><primary>asynchronous exceptions</primary></indexterm>
+    
+    <para>Asynchronous exceptions are so-called because they arise due
+    to external influences, and can be raised at any point during
+    execution.  <literal>StackOverflow</literal> and
+    <literal>HeapOverflow</literal> are two examples of
+    system-generated asynchronous exceptions.</para>
+
+    <para>The primary source of asynchronous exceptions, however, is
+    <literal>raiseInThread</literal>, from the
+    <literal>Concurrent</literal> library (see <xref
+    linkend="sec-Concurrency-Basics">):</para>
+
+<Screen>
+   raiseInThread :: ThreadId -&gt; Exception -&gt; IO ()
+</Screen>
+
+    <para><literal>raiseInThread</literal> allows one running thread
+    to raise an arbitrary exception in another thread.  The exception
+    is therefore asynchronous with respect to the target thread, which
+    could be doing anything at the time it receives the exception.
+    Great care should be taken with asynchronous exceptions; it is all
+    too easy to introduce race conditions by the over zealous use of
+    <literal>raiseInThread</literal>.</para>
+    
+    <para>There are two functions which allow a thread to control the
+    delivery of asynchronous exceptions during critical
+    sections:</para>
+
+<screen>
+   blockAsyncExceptions   :: IO () -> IO ()
+   unblockAsyncExceptions :: IO () -> IO ()
+</screen>
+
+    <para>Applying <function>blockAsyncExceptions</function> to a
+    computation will execute that computation with asynchronous
+    exceptions <firstterm>blocked</firstterm>.  That is, any thread
+    which attempts to raise an exception in the current thread will be
+    blocked until asynchronous exceptions are enabled again.  There's
+    no need to worry about re-enabling asynchronous exceptions; that's
+    done automatically on exiting the scope of
+    <function>blockAsyncExceptions</function>.</para>
+
+    <para>To re-enable asynchronous exceptions inside the scope of
+    <function>blockAsyncExceptions</function>,
+    <function>unblockAsyncExceptions</function> can be used.  It
+    scopes in exactly the same way, so on exit from
+    <function>unblockAsyncExceptions</function> asynchronous exception
+    delivery will be disabled again.</para>
+
+    <para>For some examples of the use of these functions, see the
+    definitions of <function>finally</function> and
+    <function>bracket</function> in the sources to the
+    <function>Exception</function> module.</para>
+
+    <Sect3>
+      <title>Applying <function>blockAsyncExceptions</function> to an
+      exception handler</title>
+
+      <para>There's an implied
+      <function>blockAsyncExceptions</function> around every exception
+      handler in a call to one of the <function>catch</function>
+      family of functions.  This is because that's what you want most
+      of the time - it eliminates a common race condition in starting
+      an exception handler, because there may be no exception handler
+      on the stack to handle another exception if one arrives
+      immediately.  If asynchronous exceptions are blocked on entering
+      the handler, though, we have time to install a new exception
+      handler before being interrupted.  If this weren't the default,
+      you'd have to write something like</para>
+
+<screen>
+      blockAsyncExceptions (
+           catchAllIO (unblockAsyncExceptions (...))
+                      (\e -> handler)
+      )
+</screen>
+
+      <para>If you need to unblock asynchronous exceptions again in
+      the exceptions handler, just use
+      <function>unblockAsyncExceptions</function> as normal.</para>
+      
+      <para>Note that <function>try</function> and friends
+      <emphasis>don't</emphasis> have a similar default, because there
+      is no exception handler in this case.  If you want to use
+      <function>try</function> in an asynchronous-exception-safe way,
+      you'll need to use
+      <function>blockAsyncExceptions</function>.</para>
+    </sect3>
+
+    <Sect3 id="interruptible-operations">
+      <title>Interruptible operations</title>
+
+      <para>Some operations are <firstterm>interruptible</firstterm>,
+      which means that they can receive asynchronous exceptions even
+      in the scope of a <function>blockAsyncExceptions</function>.
+      Any function which may itself block is defined as interruptible;
+      this includes <function>takeMVar</function>, and most
+      I/O-performing operations.  The reason for having interruptible
+      operations is so that we can write things like</para>
+
+<screen>
+      blockAsyncExceptions (
+         a <- takeMVar m
+         catch (unblockAsyncExceptions (...))
+               (\e -> ...)
+      )
+</screen>
+
+      <para>if the <function>takeMVar</function> wasn't interruptible,
+      then this particular combination could lead to deadlock, because
+      the thread itself would be blocked in a state where it can't
+      receive any asynchronous exceptions.  With
+      <function>takeMVar</function> interruptible, however, we can be
+      safe in the knowledge that the thread can receive exceptions
+      right up until the point when the <function>takeMVar</function>
+      succeeds.  Similar arguments apply for other interruptible
+      operations like <function>IO.openFile</function>.</para>
+    </sect3>
+
+  </sect2>
+
+</Sect1>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("../../doc/hslibs.sgml" "book" "chapter" "sect1") ***
+     ;;; End: ***
+ -->

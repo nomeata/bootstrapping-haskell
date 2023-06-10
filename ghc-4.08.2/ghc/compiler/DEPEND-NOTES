@@ -1,0 +1,52 @@
+		Notes on module dependencies
+		~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Name/Var/Type group is a bit complicated. Here's the deal
+Things in brackets are what the module *uses*.
+A 'loop' indicates a use from a module compiled later
+
+	Name, PrimRep, FieldLabel (loop Type.Type)
+then
+	Var (loop CoreSyn.CoreExpr, loop IdInfo.IdInfo, 
+	     loop Type.GenType, loop Type.Kind)
+then
+	VarEnv, VarSet, ThinAir
+then
+	Class (loop TyCon.TyCon, loop Type.Type, loop InstEnv.InstEnv)
+then
+	TyCon (loop Type.Type, loop Type.Kind, loop DataCon.DataCon)
+then
+	Type (loop DataCon.DataCon, loop Subst.substTy)
+then
+	TysPrim (Type), PprEnv (loop DataCon.DataCon, Type)
+then
+	Unify, PprType (PprEnv)
+then
+	Literal (TysPrim, PprType), DataCon
+then
+	InstEnv (Unify)
+then
+	TysWiredIn (DataCon.mkDataCon, loop MkId.mkDataConId)
+then
+	PrimOp (PprType, TysWiredIn)
+then
+	CoreSyn
+then
+	IdInfo (loop CoreSyn.CoreRules etc, loop CoreUnfold.Unfolding) 
+then
+	Id (lots from IdInfo)
+then
+	CoreFVs, PprCore
+then
+	CoreUtils (PprCore.pprCoreExpr, CoreFVs.exprFreeVars,
+		   loop CoreUnfold.isEvaldUnfolding CoreUnfold.maybeUnfoldingTemplate)
+then	
+	OccurAnal (CoreUtils.exprIsTrivial)
+then
+	CoreUnfold (OccurAnal.occurAnalyseGlobalExpr)
+then
+	Rules (Unfolding), Subst (Unfolding, CoreFVs), CoreTidy (noUnfolding)
+then
+	MkId (CoreUnfold.mkUnfolding, Subst)
+
+

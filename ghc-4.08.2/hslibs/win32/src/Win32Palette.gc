@@ -1,0 +1,36 @@
+module Win32Palette where
+
+import StdDIS
+import Win32Types
+import GDITypes
+
+%#include <windows.h>
+%#include "errors.h"
+%#include "win32debug.h"
+%#include "finalizers.h"
+
+----------------------------------------------------------------
+-- Palettes
+----------------------------------------------------------------
+
+%dis stockPalette x = wORD x
+type StockPalette   = WORD
+
+%const StockPalette 
+% [ DEFAULT_PALETTE
+% ]
+
+%fun GetStockPalette :: StockPalette -> IO HPALETTE
+%code res1 = GetStockObject(arg1);
+%fail { res1 == (HPALETTE) NULL } { ErrorString("GetStockPalette") }
+
+%fun deletePalette :: HPALETTE -> IO ()
+%code BOOL success = DeleteObject(arg1);
+%fail { !success } { ErrorString("DeletePalette") }
+
+%fun PALETTERGB   :: BYTE -> BYTE -> BYTE -> COLORREF
+%fun PALETTEINDEX :: WORD -> COLORREF
+
+----------------------------------------------------------------
+-- End
+----------------------------------------------------------------

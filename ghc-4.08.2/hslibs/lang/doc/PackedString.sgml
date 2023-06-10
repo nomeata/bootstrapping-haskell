@@ -1,0 +1,73 @@
+
+<Sect1 id="PackedString">
+<Title><Literal>PackedString</Literal></Title>
+
+<Para>
+<IndexTerm><Primary>PackedString module (misc syslib)</Primary></IndexTerm>
+You need to <Literal>import PackedString</Literal> and heave in your
+<Option>-syslib ghc</Option> to use <Literal>PackedString</Literal>s.
+</Para>
+
+<Para>
+The basic type and functions available are:
+
+<ProgramListing>
+data PackedString -- abstract
+
+packString          :: [Char] -&#62; PackedString
+packStringST        :: [Char] -&#62; ST s PackedString
+packCBytesST        :: Int -&#62; Addr -&#62; ST s PackedString
+packBytesForCST     :: [Char] -&#62; ST s (ByteArray Int)
+byteArrayToPS       :: ByteArray Int -&#62; PackedString
+unsafeByteArrayToPS :: ByteArray a   -&#62; Int -&#62; PackedString
+psToByteArray       :: PackedString -&#62; ByteArray Int
+psToByteArrayST     :: PackedString -&#62; ST s (ByteArray Int)
+
+unpackPS        :: PackedString -&#62; [Char]
+</ProgramListing>
+
+</Para>
+
+<Para>
+We also provide a wad of list-manipulation-like functions:
+
+<ProgramListing>
+nilPS       :: PackedString
+consPS      :: Char -&#62; PackedString -&#62; PackedString
+
+headPS      :: PackedString -&#62; Char
+tailPS      :: PackedString -&#62; PackedString
+nullPS      :: PackedString -&#62; Bool
+appendPS    :: PackedString -&#62; PackedString -&#62; PackedString
+lengthPS    :: PackedString -&#62; Int
+indexPS     :: PackedString -&#62; Int -&#62; Char
+            -- 0-origin indexing into the string
+mapPS       :: (Char -&#62; Char) -&#62; PackedString -&#62; PackedString
+filterPS    :: (Char -&#62; Bool) -&#62; PackedString -&#62; PackedString
+foldlPS     :: (a -&#62; Char -&#62; a) -&#62; a -&#62; PackedString -&#62; a
+foldrPS     :: (Char -&#62; a -&#62; a) -&#62; a -&#62; PackedString -&#62; a
+takePS      :: Int -&#62; PackedString -&#62; PackedString
+dropPS      :: Int -&#62; PackedString -&#62; PackedString
+splitAtPS   :: Int -&#62; PackedString -&#62; (PackedString, PackedString)
+takeWhilePS :: (Char -&#62; Bool) -&#62; PackedString -&#62; PackedString
+dropWhilePS :: (Char -&#62; Bool) -&#62; PackedString -&#62; PackedString
+spanPS      :: (Char -&#62; Bool) -&#62; PackedString -&#62; (PackedString, PackedString)
+breakPS     :: (Char -&#62; Bool) -&#62; PackedString -&#62; (PackedString, PackedString)
+linesPS     :: PackedString -&#62; [PackedString]
+wordsPS     :: PackedString -&#62; [PackedString]
+reversePS   :: PackedString -&#62; PackedString
+concatPS    :: [PackedString] -&#62; PackedString
+elemPS      :: Char -&#62; PackedString -&#62; Bool
+  -- Perl-style split&amp;join
+splitPS     :: Char -&#62; PackedString -&#62; [PackedString]
+splitWithPS :: (Char -&#62; Bool) -&#62; PackedString -&#62; [PackedString]
+joinPS      :: PackedString -&#62; [PackedString] -&#62; PackedString
+
+substrPS   :: PackedString -&#62; Int -&#62; Int -&#62; PackedString
+           -- pluck out a piece of a PackedString
+           -- start and end chars you want; both 0-origin-specified
+</ProgramListing>
+
+</Para>
+
+</Sect1>

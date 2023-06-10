@@ -1,0 +1,100 @@
+The Glasgow Haskell Compiler
+============================
+
+(this file is fptools/ghc/README in a source distribution, and
+fptools/README in a binary distribution).
+
+GHC is a batch compiler for Haskell 98.  See the file ANNOUNCE for
+information on the current version.
+
+Haskell is "the" standard lazy functional programming language.
+Haskell 98 is the current version of the language, released in
+December 1998.  The language definition is on the Web at
+http://www.haskell.org/definition/.
+
+More information on GHC can be found on its web page
+
+	http://www.haskell.org/ghc/
+
+Documentation
+=============
+
+In a binary distribution, pre-formatted documentation can be found in
+the html and ps directories.  Pre-formatted HTML documentation is also
+available on the GHC web page.
+
+In a source distribution, the unformatted (SGML) documentation is in
+the following places:
+
+  * fptools/ghc/docs/users_guide  Users' Guide.
+  * fptools/hslibs/doc/hslibs	  Library documentation.
+  * fptools/docs  		  Build System Guide.
+
+We welcome your comments and suggestions about this software!  Please
+do not suffer or grumble in silence.  The "bug reports" section of the
+User's Guide says what we would like to know when you report a
+problem.
+
+Mailing Lists
+=============
+
+    glasgow-haskell-bugs@haskell.org	 (bug reports mailing list)
+    glasgow-haskell-users@haskell.org	 (users' mailing list)
+    cvs-ghc@haskell.org			 (developers & bleeding-edge users list)
+
+    subscribe at http://www.haskell.org/mailman/listinfo/
+
+
+Current GHC team:
+
+    Simon Peyton Jones	<simonpj@microsoft.com>     [our Fearless Leader]
+    Simon Marlow	<simonmar@microsoft.com>    [hired hand]
+    Julian Seward       <v-julsew@microsoft.com>    [hired hand]
+    Reuben Thomas	<v-reubth@microsoft.com>    [hired hand]
+
+Additional Contributors (in alphabetical order):
+
+    Manuel Chakravarty   <chak@cse.unsw.edu.au>
+    Sigbjorn Finne	 <sof@microsoft.com>
+    Kevin Glynn		 <keving@cs.mu.oz.au>
+    Jeff Lewis		 <jlewis@cse.ogi.edu>
+    Hans Wolfgang Lloidl <hwloidl@cee.hw.ac.uk>
+    Sven Panne		 <Sven.Panne@informatik.uni-muenchen.de>
+    Keith Wansborough    <Keith.Wansbrough@cl.cam.ac.uk>
+
+Past contributors and/or continuing advisors (all @dcs.gla.ac.uk):
+
+    Juan Quintela       (quintela)
+    Thomas Nordin       (nordin)    [@cse.ogi.edu; Green Card Hero]
+    Patrick Sansom	(sansom)    [hired hand, Bidirectional Analyses]
+    Phil Trinder	(trinder)   [hired hand, Parade]
+    Andy Gill		(andy)	    [ex-PhD student; at OGI]
+    Cordy Hall		(cvh) 	    [GRASP]
+    Kevin Hammond	(kh)	    [GRASP; at St. Andrews]
+    John Launchbury	(jl)	    [AQUA; at OGI]
+    Jim Mattson		(mattson)   [hired hand, AQUA; HP]
+    Darren Moffat	(moffatd)   [slave, summer '95; at MoD]
+    Will Partain	(partain)   [GRASP/AQUA; touring with Johnny Cash]
+    Bryan O'Sullivan	(bos)	    [visiting slave, summer '94; at Sun]
+    Alastair Reid	(areid)	    [GHCI, STG/Hugs etc.]
+    Andr\'e Santos	(andre)	    [PhD student; back in Brazil]
+    David N Turner	(dnt)	    [Linear Types; at An-Teallach]
+    Phil Wadler		(wadler)    [GRASP; at Lucent]
+
+And many others who've contributed bits of code / bug reports in the past.
+
+Cool people who've let us use their machines:
+
+    sparc-sun-sunos{4,5}   PacSoft, Oregon Graduate Institute
+    hppa1.1-hp-hpux,
+    i386-unknown-linux	   Charles Krasic, Oregon Graduate Institute
+    alpha-dec-osf,        
+    i386-*-solaris2        Mark Fanty, CSLU, Oregon Graduate Institute
+
+Also thanks to Conal Elliott, Microsoft Research for facilitating the work
+on the Win32 port of GHC.
+
+Simon's projects' acronyms:
+    GRIP  ('87-'90): Graph reduction in parallel
+    GRASP ('90-'92): Graph reduction applications support project
+    AQUA  ('93-   ): Declarative systems architecture: a quantitative approach

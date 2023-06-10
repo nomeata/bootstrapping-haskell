@@ -1,0 +1,38 @@
+<Sect1 id="sec-glaexts">
+<Title><Literal>GlaExts</Literal></Title>
+
+<Para>
+<IndexTerm><Primary>GlaExts interface (GHC extensions)</Primary></IndexTerm>
+The <Literal>GlaExts</Literal> interface provides access to extensions that only GHC
+implements.  These currently are: unboxed types, including the
+representations of the primitive types (Int, Float, etc.), and the
+GHC primitive operations (<Function>+&num;</Function>, <Function>==&num;</Function>, etc.).
+</Para>
+
+<Para>
+This module used to provide access to all the Glasgow extensions, but
+these have since been moved into separate libraries for compatibility
+with Hugs (version 2.09: in fact, you can still get at this stuff via
+<Literal>GlaExts</Literal> for compatibility, but this facility will likely be removed
+in the future).
+</Para>
+
+<Para>
+
+<ProgramListing>
+-- the representation of some basic types:
+data Char    = C# Char#
+data Int     = I# Int#
+data Addr    = A# Addr#
+data Word    = W# Word#
+data Float   = F# Float#
+data Double  = D# Double#
+data Integer = S# Int#              -- small integers
+             | J# Int# ByteArray#   -- large integers
+
+module GHC  -- all primops and primitive types.
+</ProgramListing>
+
+</Para>
+
+</Sect1>

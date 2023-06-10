@@ -1,0 +1,97 @@
+
+<Sect1 id="sec-Bits">
+<Title><literal>Bits</literal><IndexTerm><Primary>Bits</Primary></IndexTerm>
+</Title>
+
+<Para>
+This module defines bitwise operations for signed and unsigned ints.
+Instances of <literal>class Bits</literal> can be obtained from the
+<literal>Int</literal> (<XRef LinkEnd="sec-Int">) and
+<literal>Word</literal> (<XRef LinkEnd="sec-Word">) modules.
+</Para>
+
+<Para>
+
+<ProgramListing>
+infixl 8 `shift`, `rotate`
+infixl 7 .&#38;.
+infixl 6 `xor`
+infixl 5 .|.
+
+class Bits a where
+  (.&#38;.), (.|.), xor :: a -&#62; a -&#62; a
+  complement        :: a -&#62; a
+  shift             :: a -&#62; Int -&#62; a
+  rotate            :: a -&#62; Int -&#62; a
+  bit               :: Int -&#62; a        
+  setBit            :: a -&#62; Int -&#62; a   
+  clearBit          :: a -&#62; Int -&#62; a   
+  complementBit     :: a -&#62; Int -&#62; a   
+  testBit           :: a -&#62; Int -&#62; Bool
+  bitSize           :: a -&#62; Int
+  isSigned          :: a -&#62; Bool
+
+shiftL, shiftR   :: Bits a =&#62; a -&#62; Int -&#62; a
+rotateL, rotateR :: Bits a =&#62; a -&#62; Int -&#62; a
+shiftL  a i = shift  a i
+shiftR  a i = shift  a (-i)
+rotateL a i = rotate a i
+rotateR a i = rotate a (-i)
+</ProgramListing>
+
+</Para>
+
+<Para>
+Notes:
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+<Function>bitSize</Function> and <Function>isSigned</Function> are like <Function>floatRadix</Function> and
+<Function>floatDigits</Function>&mdash;they return parameters of the <Emphasis>type</Emphasis> of their
+argument rather than of the particular argument they are applied to.
+<Function>bitSize</Function> returns the number of bits in the type; and
+<Function>isSigned</Function> returns whether the type is signed or not.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+<Function>shift</Function> performs sign extension on signed number types.
+That is, right shifts fill the top bits with 1 if the number is negative
+and with 0 otherwise.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Bits are numbered from 0 with bit 0 being the least significant bit.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+<Literal>shift x i</Literal> and <Literal>rotate x i</Literal> shift to the left if <Literal>i</Literal> is
+positive and to the right otherwise.  
+</Para>
+</ListItem>
+
+<!--
+  <item>
+    <tt/rotate/ is well defined only if bitSize returns a number.
+    (Maybe we should impose a Bounded constraint on it?)
+  -->
+
+<ListItem>
+
+<Para>
+<Literal>bit i</Literal> is the value with the i'th bit set.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect1>

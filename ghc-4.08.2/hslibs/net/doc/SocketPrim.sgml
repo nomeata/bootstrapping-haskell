@@ -1,0 +1,144 @@
+<Sect1 id="SocketPrim">
+<Title><Literal>SocketPrim</Literal>: The low-level socket binding
+<IndexTerm><Primary>SocketPrim</Primary></IndexTerm>
+</Title>
+
+<Para> The <Literal>SocketPrim</Literal> module is for when you want
+full control over the sockets, exposing the C socket API.
+Your best bet for documentation is to look at the code&mdash;really!&mdash;
+normally in <Filename>fptools/hslibs/net/SocketPrim.lhs</Filename>.
+
+<ProgramListing>
+data Socket             -- instance of: Eq, Show
+
+-- your mileage may vary depending on the OS you use...
+data Family = instance of: Eq, Ord, Ix, Show
+     AF_802             -- IEEE 802.2, also ISO 8802
+   | AF_APPLETALK       -- Apple Talk
+   | AF_ARP             -- (rev.) addr. res. prot. (RFC 826)
+   | AF_AX25
+   | AF_CCITT           -- CCITT protocols, X.25 etc
+   | AF_CHAOS           -- mit CHAOS protocols
+   | AF_CNT             -- Computer Network Technology
+   | AF_COIP            -- connection-oriented IP, aka ST II
+   | AF_CTF             -- Common Trace Facility
+   | AF_DATAKIT         -- datakit protocols
+   | AF_DECnet          -- DECnet
+   | AF_DLI             -- DEC Direct data link interface
+   | AF_ECMA            -- european computer manufacturers
+   | AF_GOSSIP          -- US Government OSI
+   | AF_HYLINK          -- NSC Hyperchannel
+   | AF_IMPLINK         -- arpanet imp addresses
+   | AF_INET            -- internetwork: UDP, TCP, etc
+   | AF_INET6           -- IPv6
+   | AF_INTF            -- Debugging use only
+   | AF_IPX             -- Novell Internet Protocol
+   | AF_ISDN            -- Integrated Services Digital Network
+   | AF_ISO             -- ISO protocols
+   | AF_LAT             -- LAT
+   | AF_LINK            -- Link layer interface
+   | AF_MAX
+   | AF_NATM            -- native ATM access
+   | AF_NBS             -- nbs protocols
+   | AF_NDD
+   | AF_NETBIOS         -- NetBios-style addresses
+   | AF_NETMAN          -- DNA Network Management
+   | AF_NETWARE
+   | AF_NIT             -- Network Interface Tap
+   | AF_NS              -- XEROX NS protocols
+   | AF_OSI             -- OSI protocols
+   | AF_OSINET          -- AFI
+   | AF_PUP             -- pup protocols: e.g. BSP
+   | AF_RAW             -- Link layer interface
+   | AF_RIF             -- raw interface
+   | AF_ROUTE           -- Internal Routing Protocol
+   | AF_SIP             -- Simple Internet Protocol
+   | AF_SNA             -- IBM SNA
+   | AF_UNIX            -- local to host (pipes, portals
+   | AF_UNSPEC          -- unspecified
+   | AF_WAN             -- Wide Area Network protocols
+   | AF_X25             -- CCITT X.25
+   | Pseudo_AF_HDRCMPLT -- Used by BPF to not rewrite hdrs in iface output
+   | Pseudo_AF_KEY      -- Internal key-management function
+   | Pseudo_AF_PIP      -- Help Identify PIP packets
+   | Pseudo_AF_RTIP     -- Help Identify RTIP packets
+   | Pseudo_AF_XTP      -- eXpress Transfer Protocol (no AF)
+
+data Socket
+  = MkSocket Int        -- File Descriptor
+             Family
+             SocketType
+             Int        -- Protocol Number
+             (IORef SocketStatus) -- Status Flag
+
+data SockAddr
+  = SockAddrUnix String -- not available con Cygwin/Mingw
+  | SockAddrInet PortNumber HostAddress
+
+type HostAddress = Word
+
+data ShutdownCmd = ShutdownReceive | ShutdownSend | ShutdownBoth
+
+type ProtocolNumber = Int
+
+socket          :: Family -&#62; SocketType -&#62; ProtocolNumber -&#62; IO Socket 
+connect         :: Socket -&#62; SockAddr -&#62; IO ()
+bindSocket      :: Socket -&#62; SockAddr -&#62; IO ()
+listen          :: Socket -&#62; Int -&#62; IO ()
+accept          :: Socket -&#62; IO (Socket, SockAddr)
+getPeerName     :: Socket -&#62; IO SockAddr
+getSocketName   :: Socket -&#62; IO SockAddr
+
+socketPort      :: Socket -&#62; IO PortNumber
+
+writeSocket     :: Socket -&#62; String -&#62; IO Int
+readSocket      :: Socket -&#62; Int -&#62; IO (String, Int)
+readSocketAll   :: Socket -&#62; IO String
+
+socketToHandle  :: Socket -&#62; IO Handle
+
+sendTo          :: Socket -&#62; String -&#62; SockAddr -&#62; IO Int
+recvFrom        :: Socket -&#62; Int -&#62; IO (String, Int, SockAddr)
+
+inet_addr       :: String -&#62; IO HostAddress
+inet_ntoa       :: HostAddress -&#62; IO String
+
+sIsConnected    :: Socket -&#62; IO Bool
+sIsBound        :: Socket -&#62; IO Bool
+sIsListening    :: Socket -&#62; IO Bool 
+sIsReadable     :: Socket -&#62; IO Bool
+sIsWritable     :: Socket -&#62; IO Bool
+shutdown        :: Socket -&#62; ShutdownCmd -&#62; IO ()
+sClose          :: Socket -&#62; IO ()
+
+data SocketOption =
+      Debug          -- SO_DEBUG
+    | ReuseAddr      -- SO_REUSEADDR
+    | Type           -- SO_TYPE
+    | SoError        -- SO_ERROR
+    | DontRoute      -- SO_DONTROUTE
+    | Broadcast      -- SO_BROADCAST
+    | SendBuffer     -- SO_SNDBUF
+    | RecvBuffer     -- SO_RCVBUF
+    | KeepAlive      -- SO_KEEPALIVE
+    | OOBInline      -- SO_OOBINLINE
+    | MaxSegment     -- TCP_MAXSEG, not available con Cygwin/Mingw
+    | NoDelay        -- TCP_NODELAY
+
+getSocketOption :: Socket -&#62; SocketOption -&#62; IO Int
+setSocketOption :: Socket -&#62; SocketOption -&#62; Int -&#62; IO ()
+
+newtype PortNumber = -- instance of Eq, Ord, Enum, Num, Real, Integral, Show
+   PNum Int          -- 16-bit value stored in network byte order.
+
+mkPortNumber    :: Int -&#62; PortNumber
+                  
+aNY_PORT        :: PortNumber
+iNADDR_ANY      :: HostAddress
+sOMAXCONN       :: Int
+maxListenQueue  :: Int
+</ProgramListing>
+
+</Para>
+
+</Sect1>

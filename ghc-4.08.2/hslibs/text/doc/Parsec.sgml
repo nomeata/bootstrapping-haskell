@@ -1,0 +1,18 @@
+<Sect1 id="sec-Parsec">
+<Title><Literal>Parsec</Literal>: Parsing combinators
+<IndexTerm><Primary>Parsec</Primary></IndexTerm>
+</Title>
+
+<Para>Parsec is a parsing combinator library. The documentation hasn't
+been incorporated into this book as yet, but for now it can be found at
+<ulink url="http://www.cs.uu.nl/~daan/parsec.html">The Parsec page</ulink>.
+</Para>
+
+</Sect1>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("../../doc/hslibs.sgml" "book" "chapter" "sect1") ***
+     ;;; End: ***
+ -->

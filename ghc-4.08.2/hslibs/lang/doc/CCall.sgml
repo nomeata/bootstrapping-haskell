@@ -1,0 +1,20 @@
+
+<Sect1 id="sec-ccall">
+<Title><Literal>CCall</Literal></Title>
+
+<Para>This module is deprecated.  Use the Foreign Function Interface
+instead.
+</Para>
+
+<Para>
+The <Literal>CCall</Literal> module defines the classes
+<Literal>CCallable</Literal> and <Literal>CReturnable</Literal>, along
+with instances for the primitive types (<Literal>Int</Literal>,
+<Literal>Int&num;</Literal>, <Literal>Float</Literal>,
+<Literal>Float&num;</Literal> etc.)  GHC knows to import this module
+if you use <Function>&lowbar;ccall&lowbar;</Function>, but if you need
+to define your own instances of these classes, you will need to import
+<Literal>CCall</Literal> explicitly.
+</Para>
+
+</Sect1>

@@ -1,0 +1,183 @@
+<Sect1 id="sec-ForeignObj">
+<Title><literal>ForeignObj</literal><IndexTerm><Primary>ForeignObj</Primary></IndexTerm>
+</Title>
+
+<Para>
+This module is part of the Foreign Function Interface (FFI) and will usually
+be imported via the module <Literal>Foreign</Literal> (see <XRef
+LinkEnd="sec-Foreign">).  The type <Literal>ForeignObj</Literal> represents
+references to objects that are maintained in a foreign language, i.e., that
+are not part of the data structures usually managed by the Haskell storage
+manager.  The essential difference between <Literal>ForeignObj</Literal>s and
+vanilla memory references of type <Literal>Addr</Literal> (<XRef
+LinkEnd="sec-Addr">) is that the former may be associated with
+<Emphasis>finalisers.</Emphasis> A finaliser is a routine that is invoked when
+the Haskell storage manager detects that - within the Haskell heap and stack -
+there are no more references left that are pointing to the
+<Literal>ForeignObj</Literal>.  Typically, the finaliser will, then, invoke
+routines in the foreign language that free the resources bound by the foreign
+object.
+</Para>
+
+<Sect2>
+  <Title>The Standard Interface</Title>
+
+<ProgramListing>
+data ForeignObj		-- abstract handle to foreign object
+instance Eq ForeignObj
+
+newForeignObj       :: Addr       -&#62; IO () -&#62; IO ForeignObj
+addForeignFinalizer :: ForeignObj -&#62; IO () -&#62; IO () 
+foreignObjToAddr    :: ForeignObj -&#62; Addr  -- *unsafe* operation
+</ProgramListing>
+<Para>
+The behaviour of the functions is as follows:
+</Para>
+<VariableList>
+
+<VarListEntry>
+<Term><Function>newForeignObj :: Addr -&#62; IO () -&#62; IO ForeignObj</Function></Term>
+<ListItem>
+<Para>
+Turns a plain memory reference into a foreign object by associating a
+finaliser - given by the monadic operation - with the reference.  The
+finaliser will be executed after the last reference to the foreign object is
+dropped.  Note that there is no guarantee on how soon the finaliser is
+executed after the last reference was dropped; this depends on the details of
+the Haskell storage manager. The only guarantee is that the finaliser
+runs before the program terminates.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>addForeignFinalizer :: ForeignObj -&#62; IO () -&#62; IO ()</Function></Term>
+<ListItem>
+<Para>
+This function adds another finaliser to the given foreign object.  No
+guarantees are made on the order in which multiple finalisers for a single
+object are run.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term><Function>foreignObjToAddr :: ForeignObj -&#62; Addr</Function></Term>
+<ListItem>
+<Para>
+Extract the plain memory reference contained in a foreign object.
+</Para>
+<Para>
+<Emphasis>This routine should be handled with a lot of care:</Emphasis> The
+reference to the foreign object that is passed in a call to
+<Function>foreignObjToAddr</Function> may be the last reference to the object
+that exists in Haskell land.  In this case, the finalisers of the foreign
+object may be activated any time after the call to
+<Function>foreignObjToAddr</Function> is evaluated.  If the finalisers, for
+example, trigger deallocation of the foreign object's memory area, the
+<Literal>Addr</Literal> obtained by the call to
+<Function>foreignObjToAddr</Function> may be rendered invalid when garbage
+collection hits after the call.  Whether this is a problem or not depends on
+the details of the finaliser code and the operations subsequently performed on
+the <Literal>Addr</Literal>.  
+</Para>
+<Para>
+If it must be guaranteed that the finalisers are not yet run, a stable pointer
+(<XRef LinkEnd="sec-stable-pointers">) should be used to establish a
+guaranteed reference to the foreign object.  The finalisers will, then,
+certainly not be run before <Function>StablePtr.freeStablePtr</Function> is
+used. 
+</Para>
+</ListItem>
+</VarListEntry>
+
+</VariableList>
+
+</Sect2>
+
+
+<Sect2>
+  <Title>The Standard C-side Interface</Title>
+
+<Para>
+The following definition is available to C programs inter-operating with
+Haskell code when including the header <Literal>HsFFI.h</Literal>.
+</Para>
+<ProgramListing>
+typedef void* HsForeignObj;  /* C representation of a ForeignObj */
+</ProgramListing>
+
+</Sect2>
+
+
+<Sect2>
+  <Title>Deprecated Functions</Title>
+
+<Para>
+The following functions are deprecated in the new FFI.  Do
+<Emphasis>not</Emphasis> use the following functions if you are interested in
+portability.  Instead of the <Literal>indexXXX</Literal>,
+<Literal>readXXX</Literal>, and <Literal>writeXXX</Literal> functions, use the
+module <Literal>Storable</Literal> (<XRef LinkEnd="sec-Storable">).
+</Para>
+
+<Para>
+Most of these functions are here for legacy reasons and may just vanish one
+day.  You have been warned.
+</Para>
+
+<ProgramListing>
+writeForeignObj :: ForeignObj -&#62; Addr{-new value-} -&#62; IO ()
+makeForeignObj :: Addr -&#62; Addr -&#62; IO ForeignObj
+
+indexCharOffForeignObj   :: ForeignObj -&#62; Int -&#62; Char
+indexIntOffForeignObj    :: ForeignObj -&#62; Int -&#62; Int
+indexWordOffForeignObj   :: ForeignObj -&#62; Int -&#62; Word
+indexAddrOffForeignObj   :: ForeignObj -&#62; Int -&#62; Addr
+indexFloatOffForeignObj  :: ForeignObj -&#62; Int -&#62; Float
+indexDoubleOffForeignObj :: ForeignObj -&#62; Int -&#62; Double
+indexWord8OffForeignObj  :: ForeignObj -&#62; Int -&#62; Word8
+indexWord16OffForeignObj :: ForeignObj -&#62; Int -&#62; Word16
+indexWord32OffForeignObj :: ForeignObj -&#62; Int -&#62; Word32
+indexWord64OffForeignObj :: ForeignObj -&#62; Int -&#62; Word64
+
+indexInt8OffForeignObj  :: ForeignObj -&#62; Int -&#62; Int8
+indexInt16OffForeignObj :: ForeignObj -&#62; Int -&#62; Int16
+indexInt32OffForeignObj :: ForeignObj -&#62; Int -&#62; Int32
+indexInt64OffForeignObj :: ForeignObj -&#62; Int -&#62; Int64
+
+-- read value out of mutable memory
+readCharOffForeignObj    :: ForeignObj -&#62; Int -&#62; IO Char
+readIntOffForeignObj     :: ForeignObj -&#62; Int -&#62; IO Int
+readWordOffForeignObj    :: ForeignObj -&#62; Int -&#62; IO Word
+readAddrOffForeignObj    :: ForeignObj -&#62; Int -&#62; IO Addr
+readFloatOffForeignObj   :: ForeignObj -&#62; Int -&#62; IO Float
+readDoubleOffForeignObj  :: ForeignObj -&#62; Int -&#62; IO Double
+readWord8OffForeignObj   :: ForeignObj -&#62; Int -&#62; IO Word8
+readWord16OffForeignObj  :: ForeignObj -&#62; Int -&#62; IO Word16
+readWord32OffForeignObj  :: ForeignObj -&#62; Int -&#62; IO Word32
+readWord64OffForeignObj  :: ForeignObj -&#62; Int -&#62; IO Word64
+readInt8OffForeignObj    :: ForeignObj -&#62; Int -&#62; IO Int8
+readInt16OffForeignObj   :: ForeignObj -&#62; Int -&#62; IO Int16
+readInt32OffForeignObj   :: ForeignObj -&#62; Int -&#62; IO Int32
+readInt64OffForeignObj   :: ForeignObj -&#62; Int -&#62; IO Int64
+
+writeCharOffForeignObj   :: ForeignObj -&#62; Int -&#62; Char   -&#62; IO ()
+writeIntOffForeignObj    :: ForeignObj -&#62; Int -&#62; Int    -&#62; IO ()
+writeWordOffForeignObj   :: ForeignObj -&#62; Int -&#62; Word   -&#62; IO ()
+writeAddrOffForeignObj   :: ForeignObj -&#62; Int -&#62; Addr   -&#62; IO ()
+writeFloatOffForeignObj  :: ForeignObj -&#62; Int -&#62; Float  -&#62; IO ()
+writeDoubleOffForeignObj :: ForeignObj -&#62; Int -&#62; Double -&#62; IO ()
+writeWord8OffForeignObj  :: ForeignObj -&#62; Int -&#62; Word8  -&#62; IO ()
+writeWord16OffForeignObj :: ForeignObj -&#62; Int -&#62; Word16 -&#62; IO ()
+writeWord32OffForeignObj :: ForeignObj -&#62; Int -&#62; Word32 -&#62; IO ()
+writeWord64OffForeignObj :: ForeignObj -&#62; Int -&#62; Word64 -&#62; IO ()
+writeInt8OffForeignObj   :: ForeignObj -&#62; Int -&#62; Int8   -&#62; IO ()
+writeInt16OffForeignObj  :: ForeignObj -&#62; Int -&#62; Int16  -&#62; IO ()
+writeInt32OffForeignObj  :: ForeignObj -&#62; Int -&#62; Int32  -&#62; IO ()
+writeInt64OffForeignObj  :: ForeignObj -&#62; Int -&#62; Int64  -&#62; IO ()
+</ProgramListing>
+
+</Sect2>
+
+</sect1>

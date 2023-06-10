@@ -1,0 +1,87 @@
+<Sect1 id="sec-pretty">
+<Title><Literal>Pretty</Literal>: Pretty printing combimators
+<IndexTerm><Primary>Pretty</Primary></IndexTerm>
+</Title>
+
+<Para>
+This library contains Simon Peyton Jones' implementation of John
+Hughes's pretty printer combinators.
+</Para>
+
+<Para>
+
+<ProgramListing>
+infixl 6 &#60;&#62, &#60;+&#62;
+infixl 5 $$, $+$
+data Doc   -- the document datatype, abstract, instance of Show
+
+-- primitive documents
+empty              :: Doc
+semi, comma, colon :: Doc
+space, equals      :: Doc
+lparen, rparen     :: Doc
+lbrack, rbrack     :: Doc
+lbrace, rbrace     :: Doc
+
+-- converting values into documents
+text     :: String   -&#62; Doc 
+ptext    :: String   -&#62; Doc 
+char     :: Char     -&#62; Doc
+int      :: Int      -&#62; Doc
+integer  :: Integer  -&#62; Doc
+float    :: Float    -&#62; Doc
+double   :: Double   -&#62; Doc
+rational :: Rational -&#62; Doc
+
+-- wrapping documents into delimiters
+parens, brackets, braces :: Doc -&#62; Doc 
+quotes, doubleQuotes     :: Doc -&#62; Doc
+
+-- combining documents
+(&#60;&#62;)      :: Doc -&#62; Doc -&#62; Doc  -- Beside
+hcat      :: [Doc] -&#62; Doc       -- List version of &#60;&#62;
+(&#60;+&#62;)     :: Doc -&#62; Doc -&#62; Doc  -- Beside, separated by space
+hsep      :: [Doc] -&#62; Doc       -- List version of &#60;+&#62;
+($$)      :: Doc -&#62; Doc -&#62; Doc  -- Above; "dovetails" if no overlap
+vcat      :: [Doc] -&#62; Doc       -- List version of $$
+($+$)     :: Doc -&#62; Doc -&#62; Doc  -- Above; never overlaps
+cat       :: [Doc] -&#62; Doc       -- Either hcat or vcat
+sep       :: [Doc] -&#62; Doc       -- Either hsep or vcat
+fcat      :: [Doc] -&#62; Doc       -- "Paragraph fill" version of cat
+fsep      :: [Doc] -&#62; Doc       -- "Paragraph fill" version of sep
+nest      :: Int -&#62; Doc -&#62; Doc  -- Nested
+hang      :: Doc -&#62; Int -&#62; Doc -&#62; Doc
+punctuate :: Doc -&#62; [Doc] -&#62; [Doc]      
+-- punctuate p [d1, ... dn] = [d1 &#60;&#62; p, d2 &#60;&#62; p, ... dn-1 &#60;&#62; p, dn]
+
+-- default rendering (normal mode, line length 100, 1.5 ribbons per line)
+render :: Doc -&#62; String         
+
+-- general rendering of documents
+fullRender ::
+      Mode
+   -&#62; Int                       -- Line length
+   -&#62; Float                     -- Ribbons per line
+   -&#62; (TextDetails -&#62; a -&#62; a)   -- What to do with text
+   -&#62; a                         -- What to do at the end
+   -&#62; Doc                       -- The document to render
+   -&#62; a                         -- Result
+
+data Mode =
+     PageMode                   -- Normal
+   | ZigZagMode                 -- With zig-zag cuts
+   | LeftMode                   -- No indentation, infinitely long lines
+   | OneLineMode                -- All on one line
+
+data TextDetails =
+     Chr  Char
+   | Str  String
+   | PStr String
+
+-- predicate on documents
+isEmpty :: Doc -&#62; Bool
+</ProgramListing>
+
+</Para>
+
+</Sect1>

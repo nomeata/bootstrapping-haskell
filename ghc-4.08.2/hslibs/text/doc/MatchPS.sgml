@@ -1,0 +1,83 @@
+<Sect1 id="MatchPS">
+<Title><Literal>MatchPS</Literal>: The Perl-like matching interface
+<IndexTerm><Primary>MatchPS library (misc syslib)</Primary></IndexTerm>
+</Title>
+
+<Para>
+(Sigbjorn Finne supplied the regular-expressions interface.)
+</Para>
+
+<Para>
+The <Literal>MatchPS</Literal> module provides Perl-like
+``higher-level'' facilities to operate on
+<Literal>PackedStrings</Literal> (<XRef LinkEnd="PackedString">).  The
+regular expressions in question are in Perl syntax.  The ``flags'' on
+various functions can include: <Option>i</Option> for
+case-insensitive, <Option>s</Option> for single-line mode, and
+<Option>g</Option> for global.  (It's probably worth your time to
+peruse the source code&hellip;)
+</Para>
+
+<Para>
+
+<ProgramListing>
+matchPS :: PackedString    -- regexp
+        -&#62; PackedString    -- string to match
+        -&#62; [Char]          -- flags
+        -&#62; Maybe REmatch   -- info about what matched and where
+
+searchPS :: PackedString    -- regexp
+         -&#62; PackedString    -- string to match
+         -&#62; [Char]          -- flags
+         -&#62; Maybe REmatch
+
+-- Perl-like match-and-substitute:
+substPS :: PackedString     -- regexp
+        -&#62; PackedString     -- replacement
+        -&#62; [Char]           -- flags
+        -&#62; PackedString     -- string
+        -&#62; PackedString
+
+-- same as substPS, but no prefix and suffix:
+replacePS :: PackedString  -- regexp
+          -&#62; PackedString  -- replacement
+          -&#62; [Char]        -- flags
+          -&#62; PackedString  -- string
+          -&#62; PackedString
+
+match2PS :: PackedString   -- regexp
+         -&#62; PackedString   -- string1 to match
+         -&#62; PackedString   -- string2 to match
+         -&#62; [Char]         -- flags
+         -&#62; Maybe REmatch
+
+search2PS :: PackedString  -- regexp
+          -&#62; PackedString  -- string to match
+          -&#62; PackedString  -- string to match
+          -&#62; [Char]        -- flags
+          -&#62; Maybe REmatch
+
+-- functions to pull the matched pieces out of an REmatch:
+
+getMatchesNo    :: REmatch -&#62; Int
+getMatchedGroup :: REmatch -&#62; Int -&#62; PackedString -&#62; PackedString
+getWholeMatch   :: REmatch -&#62; PackedString -&#62; PackedString
+getLastMatch    :: REmatch -&#62; PackedString -&#62; PackedString
+getAfterMatch   :: REmatch -&#62; PackedString -&#62; PackedString
+
+-- (reverse) brute-force string matching;
+-- Perl equivalent is index/rindex:
+findPS, rfindPS :: PackedString -&#62; PackedString -&#62; Maybe Int
+
+-- Equivalent to Perl "chop" (off the last character, if any):
+chopPS :: PackedString -&#62; PackedString
+
+-- matchPrefixPS: tries to match as much as possible of strA starting
+-- from the beginning of strB (handy when matching fancy literals in
+-- parsers):
+matchPrefixPS :: PackedString -&#62; PackedString -&#62; Int
+</ProgramListing>
+
+</Para>
+
+</Sect1>

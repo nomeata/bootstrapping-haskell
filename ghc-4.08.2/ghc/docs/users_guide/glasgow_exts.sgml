@@ -1,0 +1,4228 @@
+<Para>
+<IndexTerm><Primary>language, GHC</Primary></IndexTerm>
+<IndexTerm><Primary>extensions, GHC</Primary></IndexTerm>
+As with all known Haskell systems, GHC implements some extensions to
+the language.  To use them, you'll need to give a <Option>-fglasgow-exts</Option>
+<IndexTerm><Primary>-fglasgow-exts option</Primary></IndexTerm> option.
+</Para>
+
+<Para>
+Virtually all of the Glasgow extensions serve to give you access to
+the underlying facilities with which we implement Haskell.  Thus, you
+can get at the Raw Iron, if you are willing to write some non-standard
+code at a more primitive level.  You need not be &ldquo;stuck&rdquo; on
+performance because of the implementation costs of Haskell's
+&ldquo;high-level&rdquo; features&mdash;you can always code &ldquo;under&rdquo; them.  In an extreme case, you can write all your time-critical code in C, and then just glue it together with Haskell!
+</Para>
+
+<Para>
+Executive summary of our extensions:
+</Para>
+
+<Para>
+<VariableList>
+
+<VarListEntry>
+<Term>Unboxed types and primitive operations:</Term>
+<ListItem>
+<Para>
+You can get right down to the raw machine types and operations;
+included in this are &ldquo;primitive arrays&rdquo; (direct access to Big Wads
+of Bytes).  Please see <XRef LinkEnd="glasgow-unboxed"> and following.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term>Multi-parameter type classes:</Term>
+<ListItem>
+<Para>
+GHC's type system supports extended type classes with multiple
+parameters.  Please see <XRef LinkEnd="multi-param-type-classes">.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term>Local universal quantification:</Term>
+<ListItem>
+<Para>
+GHC's type system supports explicit universal quantification in
+constructor fields and function arguments.  This is useful for things
+like defining <Literal>runST</Literal> from the state-thread world.  See <XRef LinkEnd="universal-quantification">.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term>Extistentially quantification in data types:</Term>
+<ListItem>
+<Para>
+Some or all of the type variables in a datatype declaration may be
+<Emphasis>existentially quantified</Emphasis>.  More details in <XRef LinkEnd="existential-quantification">.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term>Scoped type variables:</Term>
+<ListItem>
+<Para>
+Scoped type variables enable the programmer to supply type signatures
+for some nested declarations, where this would not be legal in Haskell
+98.  Details in <XRef LinkEnd="scoped-type-variables">.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term>Pattern guards</Term>
+<ListItem>
+<Para>
+Instead of being a boolean expression, a guard is a list of qualifiers, exactly as in a list comprehension. See <XRef LinkEnd="pattern-guards">.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term>Foreign calling:</Term>
+<ListItem>
+<Para>
+Just what it sounds like.  We provide <Emphasis>lots</Emphasis> of rope that you
+can dangle around your neck.  Please see <XRef LinkEnd="ffi">.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term>Pragmas</Term>
+<ListItem>
+<Para>
+Pragmas are special instructions to the compiler placed in the source
+file.  The pragmas GHC supports are described in <XRef LinkEnd="pragmas">.
+</Para>
+</ListItem>
+</VarListEntry>
+
+<VarListEntry>
+<Term>Rewrite rules:</Term>
+<ListItem>
+<Para>
+The programmer can specify rewrite rules as part of the source program
+(in a pragma).  GHC applies these rewrite rules wherever it can.
+Details in <XRef LinkEnd="rewrite-rules">.
+</Para>
+</ListItem>
+</VarListEntry>
+</VariableList>
+</Para>
+
+<Para>
+Before you get too carried away working at the lowest level (e.g.,
+sloshing <Literal>MutableByteArray&num;</Literal>s around your
+program), you may wish to check if there are libraries that provide a
+&ldquo;Haskellised veneer&rdquo; over the features you want.  See
+<xref linkend="book-hslibs">.
+</Para>
+
+<Sect1 id="primitives">
+<Title>Unboxed types and primitive operations
+</Title>
+<IndexTerm><Primary>PrelGHC module</Primary></IndexTerm>
+
+<Para>
+This module defines all the types which are primitive in Glasgow
+Haskell, and the operations provided for them.
+</Para>
+
+<Sect2 id="glasgow-unboxed">
+<Title>Unboxed types
+</Title>
+
+<Para>
+<IndexTerm><Primary>Unboxed types (Glasgow extension)</Primary></IndexTerm>
+</Para>
+
+<para>Most types in GHC are <firstterm>boxed</firstterm>, which means
+that values of that type are represented by a pointer to a heap
+object.  The representation of a Haskell <literal>Int</literal>, for
+example, is a two-word heap object.  An <firstterm>unboxed</firstterm>
+type, however, is represented by the value itself, no pointers or heap
+allocation are involved.
+</para>
+
+<Para>
+Unboxed types correspond to the &ldquo;raw machine&rdquo; types you
+would use in C: <Literal>Int&num;</Literal> (long int),
+<Literal>Double&num;</Literal> (double), <Literal>Addr&num;</Literal>
+(void *), etc.  The <Emphasis>primitive operations</Emphasis>
+(PrimOps) on these types are what you might expect; e.g.,
+<Literal>(+&num;)</Literal> is addition on
+<Literal>Int&num;</Literal>s, and is the machine-addition that we all
+know and love&mdash;usually one instruction.
+</Para>
+
+<Para>
+Primitive (unboxed) types cannot be defined in Haskell, and are
+therefore built into the language and compiler.  Primitive types are
+always unlifted; that is, a value of a primitive type cannot be
+bottom.  We use the convention that primitive types, values, and
+operations have a <Literal>&num;</Literal> suffix.
+</Para>
+
+<Para>
+Primitive values are often represented by a simple bit-pattern, such
+as <Literal>Int&num;</Literal>, <Literal>Float&num;</Literal>,
+<Literal>Double&num;</Literal>.  But this is not necessarily the case:
+a primitive value might be represented by a pointer to a
+heap-allocated object.  Examples include
+<Literal>Array&num;</Literal>, the type of primitive arrays.  A
+primitive array is heap-allocated because it is too big a value to fit
+in a register, and would be too expensive to copy around; in a sense,
+it is accidental that it is represented by a pointer.  If a pointer
+represents a primitive value, then it really does point to that value:
+no unevaluated thunks, no indirections&hellip;nothing can be at the
+other end of the pointer than the primitive value.
+</Para>
+
+<Para>
+There are some restrictions on the use of primitive types, the main
+one being that you can't pass a primitive value to a polymorphic
+function or store one in a polymorphic data type.  This rules out
+things like <Literal>[Int&num;]</Literal> (i.e. lists of primitive
+integers).  The reason for this restriction is that polymorphic
+arguments and constructor fields are assumed to be pointers: if an
+unboxed integer is stored in one of these, the garbage collector would
+attempt to follow it, leading to unpredictable space leaks.  Or a
+<Function>seq</Function> operation on the polymorphic component may
+attempt to dereference the pointer, with disastrous results.  Even
+worse, the unboxed value might be larger than a pointer
+(<Literal>Double&num;</Literal> for instance).
+</Para>
+
+<Para>
+Nevertheless, A numerically-intensive program using unboxed types can
+go a <Emphasis>lot</Emphasis> faster than its &ldquo;standard&rdquo;
+counterpart&mdash;we saw a threefold speedup on one example.
+</Para>
+
+</sect2>
+
+<Sect2 id="unboxed-tuples">
+<Title>Unboxed Tuples
+</Title>
+
+<Para>
+Unboxed tuples aren't really exported by <Literal>PrelGHC</Literal>,
+they're available by default with <Option>-fglasgow-exts</Option>.  An
+unboxed tuple looks like this:
+</Para>
+
+<Para>
+
+<ProgramListing>
+(# e_1, ..., e_n #)
+</ProgramListing>
+
+</Para>
+
+<Para>
+where <Literal>e&lowbar;1..e&lowbar;n</Literal> are expressions of any
+type (primitive or non-primitive).  The type of an unboxed tuple looks
+the same.
+</Para>
+
+<Para>
+Unboxed tuples are used for functions that need to return multiple
+values, but they avoid the heap allocation normally associated with
+using fully-fledged tuples.  When an unboxed tuple is returned, the
+components are put directly into registers or on the stack; the
+unboxed tuple itself does not have a composite representation.  Many
+of the primitive operations listed in this section return unboxed
+tuples.
+</Para>
+
+<Para>
+There are some pretty stringent restrictions on the use of unboxed tuples:
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ Unboxed tuple types are subject to the same restrictions as
+other unboxed types; i.e. they may not be stored in polymorphic data
+structures or passed to polymorphic functions.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Unboxed tuples may only be constructed as the direct result of
+a function, and may only be deconstructed with a <Literal>case</Literal> expression.
+eg. the following are valid:
+
+
+<ProgramListing>
+f x y = (# x+1, y-1 #)
+g x = case f x x of { (# a, b #) -&#62; a + b }
+</ProgramListing>
+
+
+but the following are invalid:
+
+
+<ProgramListing>
+f x y = g (# x, y #)
+g (# x, y #) = x + y
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ No variable can have an unboxed tuple type.  This is illegal:
+
+
+<ProgramListing>
+f :: (# Int, Int #) -&#62; (# Int, Int #)
+f x = x
+</ProgramListing>
+
+
+because <VarName>x</VarName> has an unboxed tuple type.
+
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+Note: we may relax some of these restrictions in the future.
+</Para>
+
+<Para>
+The <Literal>IO</Literal> and <Literal>ST</Literal> monads use unboxed tuples to avoid unnecessary
+allocation during sequences of operations.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Character and numeric types</Title>
+
+<Para>
+<IndexTerm><Primary>character types, primitive</Primary></IndexTerm>
+<IndexTerm><Primary>numeric types, primitive</Primary></IndexTerm>
+<IndexTerm><Primary>integer types, primitive</Primary></IndexTerm>
+<IndexTerm><Primary>floating point types, primitive</Primary></IndexTerm>
+There are the following obvious primitive types:
+</Para>
+
+<Para>
+
+<ProgramListing>
+type Char#
+type Int#
+type Word#
+type Addr#
+type Float#
+type Double#
+type Int64#
+type Word64#
+</ProgramListing>
+
+<IndexTerm><Primary><literal>Char&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>Int&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>Word&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>Addr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>Float&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>Double&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>Int64&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>Word64&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+If you really want to know their exact equivalents in C, see
+<Filename>ghc/includes/StgTypes.h</Filename> in the GHC source tree.
+</Para>
+
+<Para>
+Literals for these types may be written as follows:
+</Para>
+
+<Para>
+
+<ProgramListing>
+1#              an Int#
+1.2#            a Float#
+1.34##          a Double#
+'a'#            a Char#; for weird characters, use e.g. '\o&#60;octal&#62;'#
+"a"#            an Addr# (a `char *'); only characters '\0'..'\255' allowed
+</ProgramListing>
+
+<IndexTerm><Primary>literals, primitive</Primary></IndexTerm>
+<IndexTerm><Primary>constants, primitive</Primary></IndexTerm>
+<IndexTerm><Primary>numbers, primitive</Primary></IndexTerm>
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Comparison operations</Title>
+
+<Para>
+<IndexTerm><Primary>comparisons, primitive</Primary></IndexTerm>
+<IndexTerm><Primary>operators, comparison</Primary></IndexTerm>
+</Para>
+
+<Para>
+
+<ProgramListing>
+{&#62;,&#62;=,==,/=,&#60;,&#60;=}# :: Int# -&#62; Int# -&#62; Bool
+
+{gt,ge,eq,ne,lt,le}Char# :: Char# -&#62; Char# -&#62; Bool
+    -- ditto for Word# and Addr#
+</ProgramListing>
+
+<IndexTerm><Primary><literal>&#62;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>&#62;=&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>==&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>/=&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>&#60;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>&#60;=&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>gt&lcub;Char,Word,Addr&rcub;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>ge&lcub;Char,Word,Addr&rcub;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>eq&lcub;Char,Word,Addr&rcub;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>ne&lcub;Char,Word,Addr&rcub;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>lt&lcub;Char,Word,Addr&rcub;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>le&lcub;Char,Word,Addr&rcub;&num;</literal></Primary></IndexTerm>
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Primitive-character operations</Title>
+
+<Para>
+<IndexTerm><Primary>characters, primitive operations</Primary></IndexTerm>
+<IndexTerm><Primary>operators, primitive character</Primary></IndexTerm>
+</Para>
+
+<Para>
+
+<ProgramListing>
+ord# :: Char# -&#62; Int#
+chr# :: Int# -&#62; Char#
+</ProgramListing>
+
+<IndexTerm><Primary><literal>ord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>chr&num;</literal></Primary></IndexTerm>
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Primitive-<Literal>Int</Literal> operations</Title>
+
+<Para>
+<IndexTerm><Primary>integers, primitive operations</Primary></IndexTerm>
+<IndexTerm><Primary>operators, primitive integer</Primary></IndexTerm>
+</Para>
+
+<Para>
+
+<ProgramListing>
+{+,-,*,quotInt,remInt,gcdInt}# :: Int# -&#62; Int# -&#62; Int#
+negateInt# :: Int# -&#62; Int#
+
+iShiftL#, iShiftRA#, iShiftRL# :: Int# -&#62; Int# -&#62; Int#
+        -- shift left, right arithmetic, right logical
+
+addIntC#, subIntC#, mulIntC# :: Int# -> Int# -> (# Int#, Int# #)
+	-- add, subtract, multiply with carry
+</ProgramListing>
+
+<IndexTerm><Primary><literal>+&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>-&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>*&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>quotInt&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>remInt&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>gcdInt&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>iShiftL&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>iShiftRA&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>iShiftRL&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>addIntC&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>subIntC&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>mulIntC&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary>shift operations, integer</Primary></IndexTerm>
+</Para>
+
+<Para>
+<Emphasis>Note:</Emphasis> No error/overflow checking!
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Primitive-<Literal>Double</Literal> and <Literal>Float</Literal> operations</Title>
+
+<Para>
+<IndexTerm><Primary>floating point numbers, primitive</Primary></IndexTerm>
+<IndexTerm><Primary>operators, primitive floating point</Primary></IndexTerm>
+</Para>
+
+<Para>
+
+<ProgramListing>
+{+,-,*,/}##         :: Double# -&#62; Double# -&#62; Double#
+{&#60;,&#60;=,==,/=,&#62;=,&#62;}## :: Double# -&#62; Double# -&#62; Bool
+negateDouble#       :: Double# -&#62; Double#
+double2Int#         :: Double# -&#62; Int#
+int2Double#         :: Int#    -&#62; Double#
+
+{plus,minux,times,divide}Float# :: Float# -&#62; Float# -&#62; Float#
+{gt,ge,eq,ne,lt,le}Float# :: Float# -&#62; Float# -&#62; Bool
+negateFloat#        :: Float# -&#62; Float#
+float2Int#          :: Float# -&#62; Int#
+int2Float#          :: Int#   -&#62; Float#
+</ProgramListing>
+
+</Para>
+
+<Para>
+<IndexTerm><Primary><literal>+&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>-&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>*&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>/&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>&#60;&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>&#60;=&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>==&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>=/&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>&#62;=&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>&#62;&num;&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>negateDouble&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>double2Int&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>int2Double&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+<IndexTerm><Primary><literal>plusFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>minusFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>timesFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>divideFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>gtFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>geFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>eqFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>neFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>ltFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>leFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>negateFloat&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>float2Int&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>int2Float&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+And a full complement of trigonometric functions:
+</Para>
+
+<Para>
+
+<ProgramListing>
+expDouble#      :: Double# -&#62; Double#
+logDouble#      :: Double# -&#62; Double#
+sqrtDouble#     :: Double# -&#62; Double#
+sinDouble#      :: Double# -&#62; Double#
+cosDouble#      :: Double# -&#62; Double#
+tanDouble#      :: Double# -&#62; Double#
+asinDouble#     :: Double# -&#62; Double#
+acosDouble#     :: Double# -&#62; Double#
+atanDouble#     :: Double# -&#62; Double#
+sinhDouble#     :: Double# -&#62; Double#
+coshDouble#     :: Double# -&#62; Double#
+tanhDouble#     :: Double# -&#62; Double#
+powerDouble#    :: Double# -&#62; Double# -&#62; Double#
+</ProgramListing>
+
+<IndexTerm><Primary>trigonometric functions, primitive</Primary></IndexTerm>
+</Para>
+
+<Para>
+similarly for <Literal>Float&num;</Literal>.
+</Para>
+
+<Para>
+There are two coercion functions for <Literal>Float&num;</Literal>/<Literal>Double&num;</Literal>:
+</Para>
+
+<Para>
+
+<ProgramListing>
+float2Double#   :: Float# -&#62; Double#
+double2Float#   :: Double# -&#62; Float#
+</ProgramListing>
+
+<IndexTerm><Primary><literal>float2Double&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>double2Float&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+The primitive version of <Function>decodeDouble</Function>
+(<Function>encodeDouble</Function> is implemented as an external C
+function):
+</Para>
+
+<Para>
+
+<ProgramListing>
+decodeDouble#   :: Double# -&#62; PrelNum.ReturnIntAndGMP
+</ProgramListing>
+
+<IndexTerm><Primary><literal>encodeDouble&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>decodeDouble&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+(And the same for <Literal>Float&num;</Literal>s.)
+</Para>
+
+</Sect2>
+
+<Sect2 id="integer-operations">
+<Title>Operations on/for <Literal>Integers</Literal> (interface to GMP)
+</Title>
+
+<Para>
+<IndexTerm><Primary>arbitrary precision integers</Primary></IndexTerm>
+<IndexTerm><Primary>Integer, operations on</Primary></IndexTerm>
+</Para>
+
+<Para>
+We implement <Literal>Integers</Literal> (arbitrary-precision
+integers) using the GNU multiple-precision (GMP) package (version
+2.0.2).
+</Para>
+
+<Para>
+The data type for <Literal>Integer</Literal> is either a small
+integer, represented by an <Literal>Int</Literal>, or a large integer
+represented using the pieces required by GMP's
+<Literal>MP&lowbar;INT</Literal> in <Filename>gmp.h</Filename> (see
+<Filename>gmp.info</Filename> in
+<Filename>ghc/includes/runtime/gmp</Filename>).  It comes out as:
+</Para>
+
+<Para>
+
+<ProgramListing>
+data Integer = S# Int#             -- small integers
+             | J# Int# ByteArray#  -- large integers
+</ProgramListing>
+
+<IndexTerm><Primary>Integer type</Primary></IndexTerm> The primitive
+ops to support large <Literal>Integers</Literal> use the
+&ldquo;pieces&rdquo; of the representation, and are as follows:
+</Para>
+
+<Para>
+
+<ProgramListing>
+negateInteger#  :: Int# -&#62; ByteArray# -&#62; Integer
+
+{plus,minus,times}Integer#, gcdInteger#, 
+  quotInteger#, remInteger#, divExactInteger#
+	:: Int# -> ByteArray#
+        -> Int# -> ByteArray#
+        -> (# Int#, ByteArray# #)
+
+cmpInteger# 
+	:: Int# -> ByteArray#
+        -> Int# -> ByteArray#
+        -> Int# -- -1 for &#60;; 0 for ==; +1 for >
+
+cmpIntegerInt# 
+	:: Int# -> ByteArray#
+        -> Int#
+        -> Int# -- -1 for &#60;; 0 for ==; +1 for >
+
+gcdIntegerInt# :: 
+	:: Int# -> ByteArray#
+        -> Int#
+        -> Int#
+
+divModInteger#, quotRemInteger#
+        :: Int# -> ByteArray#
+        -> Int# -> ByteArray#
+        -> (# Int#, ByteArray#,
+                  Int#, ByteArray# #)
+
+integer2Int# :: Int# -> ByteArray# -> Int#
+
+int2Integer#  :: Int#  -> Integer -- NB: no error-checking on these two!
+word2Integer# :: Word# -> Integer
+
+addr2Integer# :: Addr# -> Integer
+        -- the Addr# is taken to be a `char *' string
+        -- to be converted into an Integer.
+</ProgramListing>
+
+<IndexTerm><Primary><literal>negateInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>plusInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>minusInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>timesInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>quotInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>remInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>gcdInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>gcdIntegerInt&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>divExactInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>cmpInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>divModInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>quotRemInteger&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>integer2Int&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>int2Integer&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>word2Integer&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>addr2Integer&num;</literal></Primary></IndexTerm>
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Words and addresses</Title>
+
+<Para>
+<IndexTerm><Primary>word, primitive type</Primary></IndexTerm>
+<IndexTerm><Primary>address, primitive type</Primary></IndexTerm>
+<IndexTerm><Primary>unsigned integer, primitive type</Primary></IndexTerm>
+<IndexTerm><Primary>pointer, primitive type</Primary></IndexTerm>
+</Para>
+
+<Para>
+A <Literal>Word&num;</Literal> is used for bit-twiddling operations.
+It is the same size as an <Literal>Int&num;</Literal>, but has no sign
+nor any arithmetic operations.
+
+<ProgramListing>
+type Word#      -- Same size/etc as Int# but *unsigned*
+type Addr#      -- A pointer from outside the "Haskell world" (from C, probably);
+                -- described under "arrays"
+</ProgramListing>
+
+<IndexTerm><Primary><literal>Word&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>Addr&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+<Literal>Word&num;</Literal>s and <Literal>Addr&num;</Literal>s have
+the usual comparison operations.  Other
+unboxed-<Literal>Word</Literal> ops (bit-twiddling and coercions):
+</Para>
+
+<Para>
+
+<ProgramListing>
+{gt,ge,eq,ne,lt,le}Word# :: Word# -> Word# -> Bool
+
+and#, or#, xor# :: Word# -> Word# -> Word#
+        -- standard bit ops.
+
+quotWord#, remWord# :: Word# -> Word# -> Word#
+        -- word (i.e. unsigned) versions are different from int
+        -- versions, so we have to provide these explicitly.
+
+not# :: Word# -> Word#
+
+shiftL#, shiftRL# :: Word# -> Int# -> Word#
+        -- shift left, right logical
+
+int2Word#       :: Int#  -> Word# -- just a cast, really
+word2Int#       :: Word# -> Int#
+</ProgramListing>
+
+<IndexTerm><Primary>bit operations, Word and Addr</Primary></IndexTerm>
+<IndexTerm><Primary><literal>gtWord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>geWord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>eqWord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>neWord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>ltWord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>leWord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>and&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>or&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>xor&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>not&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>quotWord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>remWord&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>shiftL&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>shiftRA&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>shiftRL&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>int2Word&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>word2Int&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+Unboxed-<Literal>Addr</Literal> ops (C casts, really):
+
+<ProgramListing>
+{gt,ge,eq,ne,lt,le}Addr# :: Addr# -> Addr# -> Bool
+
+int2Addr#       :: Int#  -> Addr#
+addr2Int#       :: Addr# -> Int#
+addr2Integer#   :: Addr# -> (# Int#, ByteArray# #)
+</ProgramListing>
+
+<IndexTerm><Primary><literal>gtAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>geAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>eqAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>neAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>ltAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>leAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>int2Addr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>addr2Int&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>addr2Integer&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+The casts between <Literal>Int&num;</Literal>,
+<Literal>Word&num;</Literal> and <Literal>Addr&num;</Literal>
+correspond to null operations at the machine level, but are required
+to keep the Haskell type checker happy.
+</Para>
+
+<Para>
+Operations for indexing off of C pointers
+(<Literal>Addr&num;</Literal>s) to snatch values are listed under
+&ldquo;arrays&rdquo;.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Arrays</Title>
+
+<Para>
+<IndexTerm><Primary>arrays, primitive</Primary></IndexTerm>
+</Para>
+
+<Para>
+The type <Literal>Array&num; elt</Literal> is the type of primitive,
+unpointed arrays of values of type <Literal>elt</Literal>.
+</Para>
+
+<Para>
+
+<ProgramListing>
+type Array# elt
+</ProgramListing>
+
+<IndexTerm><Primary><literal>Array&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+<Literal>Array&num;</Literal> is more primitive than a Haskell
+array&mdash;indeed, the Haskell <Literal>Array</Literal> interface is
+implemented using <Literal>Array&num;</Literal>&mdash;in that an
+<Literal>Array&num;</Literal> is indexed only by
+<Literal>Int&num;</Literal>s, starting at zero.  It is also more
+primitive by virtue of being unboxed.  That doesn't mean that it isn't
+a heap-allocated object&mdash;of course, it is.  Rather, being unboxed
+means that it is represented by a pointer to the array itself, and not
+to a thunk which will evaluate to the array (or to bottom).  The
+components of an <Literal>Array&num;</Literal> are themselves boxed.
+</Para>
+
+<Para>
+The type <Literal>ByteArray&num;</Literal> is similar to
+<Literal>Array&num;</Literal>, except that it contains just a string
+of (non-pointer) bytes.
+</Para>
+
+<Para>
+
+<ProgramListing>
+type ByteArray#
+</ProgramListing>
+
+<IndexTerm><Primary><literal>ByteArray&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+Arrays of these types are useful when a Haskell program wishes to
+construct a value to pass to a C procedure. It is also possible to use
+them to build (say) arrays of unboxed characters for internal use in a
+Haskell program.  Given these uses, <Literal>ByteArray&num;</Literal>
+is deliberately a bit vague about the type of its components.
+Operations are provided to extract values of type
+<Literal>Char&num;</Literal>, <Literal>Int&num;</Literal>,
+<Literal>Float&num;</Literal>, <Literal>Double&num;</Literal>, and
+<Literal>Addr&num;</Literal> from arbitrary offsets within a
+<Literal>ByteArray&num;</Literal>.  (For type
+<Literal>Foo&num;</Literal>, the $i$th offset gets you the $i$th
+<Literal>Foo&num;</Literal>, not the <Literal>Foo&num;</Literal> at
+byte-position $i$.  Mumble.)  (If you want a
+<Literal>Word&num;</Literal>, grab an <Literal>Int&num;</Literal>,
+then coerce it.)
+</Para>
+
+<Para>
+Lastly, we have static byte-arrays, of type
+<Literal>Addr&num;</Literal> &lsqb;mentioned previously].  (Remember
+the duality between arrays and pointers in C.)  Arrays of this types
+are represented by a pointer to an array in the world outside Haskell,
+so this pointer is not followed by the garbage collector.  In other
+respects they are just like <Literal>ByteArray&num;</Literal>.  They
+are only needed in order to pass values from C to Haskell.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Reading and writing</Title>
+
+<Para>
+Primitive arrays are linear, and indexed starting at zero.
+</Para>
+
+<Para>
+The size and indices of a <Literal>ByteArray&num;</Literal>, <Literal>Addr&num;</Literal>, and
+<Literal>MutableByteArray&num;</Literal> are all in bytes.  It's up to the program to
+calculate the correct byte offset from the start of the array.  This
+allows a <Literal>ByteArray&num;</Literal> to contain a mixture of values of different
+type, which is often needed when preparing data for and unpicking
+results from C.  (Umm&hellip;not true of indices&hellip;WDP 95/09)
+</Para>
+
+<Para>
+<Emphasis>Should we provide some <Literal>sizeOfDouble&num;</Literal> constants?</Emphasis>
+</Para>
+
+<Para>
+Out-of-range errors on indexing should be caught by the code which
+uses the primitive operation; the primitive operations themselves do
+<Emphasis>not</Emphasis> check for out-of-range indexes. The intention is that the
+primitive ops compile to one machine instruction or thereabouts.
+</Para>
+
+<Para>
+We use the terms &ldquo;reading&rdquo; and &ldquo;writing&rdquo; to refer to accessing
+<Emphasis>mutable</Emphasis> arrays (see <XRef LinkEnd="sect-mutable">), and
+&ldquo;indexing&rdquo; to refer to reading a value from an <Emphasis>immutable</Emphasis>
+array.
+</Para>
+
+<Para>
+Immutable byte arrays are straightforward to index (all indices in bytes):
+
+<ProgramListing>
+indexCharArray#   :: ByteArray# -> Int# -> Char#
+indexIntArray#    :: ByteArray# -> Int# -> Int#
+indexAddrArray#   :: ByteArray# -> Int# -> Addr#
+indexFloatArray#  :: ByteArray# -> Int# -> Float#
+indexDoubleArray# :: ByteArray# -> Int# -> Double#
+
+indexCharOffAddr#   :: Addr# -> Int# -> Char#
+indexIntOffAddr#    :: Addr# -> Int# -> Int#
+indexFloatOffAddr#  :: Addr# -> Int# -> Float#
+indexDoubleOffAddr# :: Addr# -> Int# -> Double#
+indexAddrOffAddr#   :: Addr# -> Int# -> Addr#
+ -- Get an Addr# from an Addr# offset
+</ProgramListing>
+
+<IndexTerm><Primary><literal>indexCharArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexIntArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexAddrArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexFloatArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexDoubleArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexCharOffAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexIntOffAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexFloatOffAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexDoubleOffAddr&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>indexAddrOffAddr&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+The last of these, <Function>indexAddrOffAddr&num;</Function>, extracts an <Literal>Addr&num;</Literal> using an offset
+from another <Literal>Addr&num;</Literal>, thereby providing the ability to follow a chain of
+C pointers.
+</Para>
+
+<Para>
+Something a bit more interesting goes on when indexing arrays of boxed
+objects, because the result is simply the boxed object. So presumably
+it should be entered&mdash;we never usually return an unevaluated
+object!  This is a pain: primitive ops aren't supposed to do
+complicated things like enter objects.  The current solution is to
+return a single element unboxed tuple (see <XRef LinkEnd="unboxed-tuples">).
+</Para>
+
+<Para>
+
+<ProgramListing>
+indexArray#       :: Array# elt -> Int# -> (# elt #)
+</ProgramListing>
+
+<IndexTerm><Primary><literal>indexArray&num;</literal></Primary></IndexTerm>
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>The state type</Title>
+
+<Para>
+<IndexTerm><Primary><literal>state, primitive type</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>State&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+The primitive type <Literal>State&num;</Literal> represents the state of a state
+transformer.  It is parameterised on the desired type of state, which
+serves to keep states from distinct threads distinct from one another.
+But the <Emphasis>only</Emphasis> effect of this parameterisation is in the type
+system: all values of type <Literal>State&num;</Literal> are represented in the same way.
+Indeed, they are all represented by nothing at all!  The code
+generator &ldquo;knows&rdquo; to generate no code, and allocate no registers
+etc, for primitive states.
+</Para>
+
+<Para>
+
+<ProgramListing>
+type State# s
+</ProgramListing>
+
+</Para>
+
+<Para>
+The type <Literal>GHC.RealWorld</Literal> is truly opaque: there are no values defined
+of this type, and no operations over it.  It is &ldquo;primitive&rdquo; in that
+sense - but it is <Emphasis>not unlifted!</Emphasis> Its only role in life is to be
+the type which distinguishes the <Literal>IO</Literal> state transformer.
+</Para>
+
+<Para>
+
+<ProgramListing>
+data RealWorld
+</ProgramListing>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>State of the world</Title>
+
+<Para>
+A single, primitive, value of type <Literal>State&num; RealWorld</Literal> is provided.
+</Para>
+
+<Para>
+
+<ProgramListing>
+realWorld# :: State# RealWorld
+</ProgramListing>
+
+<IndexTerm><Primary>realWorld&num; state object</Primary></IndexTerm>
+</Para>
+
+<Para>
+(Note: in the compiler, not a <Literal>PrimOp</Literal>; just a mucho magic
+<Literal>Id</Literal>. Exported from <Literal>GHC</Literal>, though).
+</Para>
+
+</Sect2>
+
+<Sect2 id="sect-mutable">
+<Title>Mutable arrays</Title>
+
+<Para>
+<IndexTerm><Primary>mutable arrays</Primary></IndexTerm>
+<IndexTerm><Primary>arrays, mutable</Primary></IndexTerm>
+Corresponding to <Literal>Array&num;</Literal> and <Literal>ByteArray&num;</Literal>, we have the types of
+mutable versions of each.  In each case, the representation is a
+pointer to a suitable block of (mutable) heap-allocated storage.
+</Para>
+
+<Para>
+
+<ProgramListing>
+type MutableArray# s elt
+type MutableByteArray# s
+</ProgramListing>
+
+<IndexTerm><Primary><literal>MutableArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>MutableByteArray&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Sect3>
+<Title>Allocation</Title>
+
+<Para>
+<IndexTerm><Primary>mutable arrays, allocation</Primary></IndexTerm>
+<IndexTerm><Primary>arrays, allocation</Primary></IndexTerm>
+<IndexTerm><Primary>allocation, of mutable arrays</Primary></IndexTerm>
+</Para>
+
+<Para>
+Mutable arrays can be allocated. Only pointer-arrays are initialised;
+arrays of non-pointers are filled in by &ldquo;user code&rdquo; rather than by
+the array-allocation primitive.  Reason: only the pointer case has to
+worry about GC striking with a partly-initialised array.
+</Para>
+
+<Para>
+
+<ProgramListing>
+newArray#       :: Int# -> elt -> State# s -> (# State# s, MutableArray# s elt #)
+
+newCharArray#   :: Int# -> State# s -> (# State# s, MutableByteArray# s elt #)
+newIntArray#    :: Int# -> State# s -> (# State# s, MutableByteArray# s elt #)
+newAddrArray#   :: Int# -> State# s -> (# State# s, MutableByteArray# s elt #)
+newFloatArray#  :: Int# -> State# s -> (# State# s, MutableByteArray# s elt #)
+newDoubleArray# :: Int# -> State# s -> (# State# s, MutableByteArray# s elt #)
+</ProgramListing>
+
+<IndexTerm><Primary><literal>newArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>newCharArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>newIntArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>newAddrArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>newFloatArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>newDoubleArray&num;</literal></Primary></IndexTerm>
+</Para>
+
+<Para>
+The size of a <Literal>ByteArray&num;</Literal> is given in bytes.
+</Para>
+
+</Sect3>
+
+<Sect3>
+<Title>Reading and writing</Title>
+
+<Para>
+<IndexTerm><Primary>arrays, reading and writing</Primary></IndexTerm>
+</Para>
+
+<Para>
+
+<ProgramListing>
+readArray#       :: MutableArray# s elt -> Int# -> State# s -> (# State# s, elt #)
+readCharArray#   :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Char# #)
+readIntArray#    :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Int# #)
+readAddrArray#   :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Addr# #)
+readFloatArray#  :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Float# #)
+readDoubleArray# :: MutableByteArray# s -> Int# -> State# s -> (# State# s, Double# #)
+
+writeArray#       :: MutableArray# s elt -> Int# -> elt     -> State# s -> State# s
+writeCharArray#   :: MutableByteArray# s -> Int# -> Char#   -> State# s -> State# s
+writeIntArray#    :: MutableByteArray# s -> Int# -> Int#    -> State# s -> State# s
+writeAddrArray#   :: MutableByteArray# s -> Int# -> Addr#   -> State# s -> State# s
+writeFloatArray#  :: MutableByteArray# s -> Int# -> Float#  -> State# s -> State# s
+writeDoubleArray# :: MutableByteArray# s -> Int# -> Double# -> State# s -> State# s
+</ProgramListing>
+
+<IndexTerm><Primary><literal>readArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>readCharArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>readIntArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>readAddrArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>readFloatArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>readDoubleArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>writeArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>writeCharArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>writeIntArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>writeAddrArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>writeFloatArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>writeDoubleArray&num;</literal></Primary></IndexTerm>
+</Para>
+
+</Sect3>
+
+<Sect3>
+<Title>Equality</Title>
+
+<Para>
+<IndexTerm><Primary>arrays, testing for equality</Primary></IndexTerm>
+</Para>
+
+<Para>
+One can take &ldquo;equality&rdquo; of mutable arrays.  What is compared is the
+<Emphasis>name</Emphasis> or reference to the mutable array, not its contents.
+</Para>
+
+<Para>
+
+<ProgramListing>
+sameMutableArray#     :: MutableArray# s elt -> MutableArray# s elt -> Bool
+sameMutableByteArray# :: MutableByteArray# s -> MutableByteArray# s -> Bool
+</ProgramListing>
+
+<IndexTerm><Primary><literal>sameMutableArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>sameMutableByteArray&num;</literal></Primary></IndexTerm>
+</Para>
+
+</Sect3>
+
+<Sect3>
+<Title>Freezing mutable arrays</Title>
+
+<Para>
+<IndexTerm><Primary>arrays, freezing mutable</Primary></IndexTerm>
+<IndexTerm><Primary>freezing mutable arrays</Primary></IndexTerm>
+<IndexTerm><Primary>mutable arrays, freezing</Primary></IndexTerm>
+</Para>
+
+<Para>
+Only unsafe-freeze has a primitive.  (Safe freeze is done directly in Haskell
+by copying the array and then using <Function>unsafeFreeze</Function>.)
+</Para>
+
+<Para>
+
+<ProgramListing>
+unsafeFreezeArray#     :: MutableArray# s elt -> State# s -> (# State# s, Array# s elt #)
+unsafeFreezeByteArray# :: MutableByteArray# s -> State# s -> (# State# s, ByteArray# #)
+</ProgramListing>
+
+<IndexTerm><Primary><literal>unsafeFreezeArray&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>unsafeFreezeByteArray&num;</literal></Primary></IndexTerm>
+</Para>
+
+</Sect3>
+
+</Sect2>
+
+<Sect2>
+<Title>Synchronizing variables (M-vars)</Title>
+
+<Para>
+<IndexTerm><Primary>synchronising variables (M-vars)</Primary></IndexTerm>
+<IndexTerm><Primary>M-Vars</Primary></IndexTerm>
+</Para>
+
+<Para>
+Synchronising variables are the primitive type used to implement
+Concurrent Haskell's MVars (see the Concurrent Haskell paper for
+the operational behaviour of these operations).
+</Para>
+
+<Para>
+
+<ProgramListing>
+type MVar# s elt        -- primitive
+
+newMVar#    :: State# s -> (# State# s, MVar# s elt #)
+takeMVar#   :: SynchVar# s elt -> State# s -> (# State# s, elt #)
+putMVar#    :: SynchVar# s elt -> State# s -> State# s
+</ProgramListing>
+
+<IndexTerm><Primary><literal>SynchVar&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>newSynchVar&num;</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>takeMVar</literal></Primary></IndexTerm>
+<IndexTerm><Primary><literal>putMVar</literal></Primary></IndexTerm>
+</Para>
+
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="glasgow-ST-monad">
+<Title>Primitive state-transformer monad
+</Title>
+
+<Para>
+<IndexTerm><Primary>state transformers (Glasgow extensions)</Primary></IndexTerm>
+<IndexTerm><Primary>ST monad (Glasgow extension)</Primary></IndexTerm>
+</Para>
+
+<Para>
+This monad underlies our implementation of arrays, mutable and
+immutable, and our implementation of I/O, including &ldquo;C calls&rdquo;.
+</Para>
+
+<Para>
+The <Literal>ST</Literal> library, which provides access to the
+<Function>ST</Function> monad, is described in <xref
+linkend="sec-ST">.
+</Para>
+
+</Sect1>
+
+<Sect1 id="glasgow-prim-arrays">
+<Title>Primitive arrays, mutable and otherwise
+</Title>
+
+<Para>
+<IndexTerm><Primary>primitive arrays (Glasgow extension)</Primary></IndexTerm>
+<IndexTerm><Primary>arrays, primitive (Glasgow extension)</Primary></IndexTerm>
+</Para>
+
+<Para>
+GHC knows about quite a few flavours of Large Swathes of Bytes.
+</Para>
+
+<Para>
+First, GHC distinguishes between primitive arrays of (boxed) Haskell
+objects (type <Literal>Array&num; obj</Literal>) and primitive arrays of bytes (type
+<Literal>ByteArray&num;</Literal>).
+</Para>
+
+<Para>
+Second, it distinguishes between&hellip;
+<VariableList>
+
+<VarListEntry>
+<Term>Immutable:</Term>
+<ListItem>
+<Para>
+Arrays that do not change (as with &ldquo;standard&rdquo; Haskell arrays); you
+can only read from them.  Obviously, they do not need the care and
+attention of the state-transformer monad.
+</Para>
+</ListItem>
+</VarListEntry>
+<VarListEntry>
+<Term>Mutable:</Term>
+<ListItem>
+<Para>
+Arrays that may be changed or &ldquo;mutated.&rdquo;  All the operations on them
+live within the state-transformer monad and the updates happen
+<Emphasis>in-place</Emphasis>.
+</Para>
+</ListItem>
+</VarListEntry>
+<VarListEntry>
+<Term>&ldquo;Static&rdquo; (in C land):</Term>
+<ListItem>
+<Para>
+A C routine may pass an <Literal>Addr&num;</Literal> pointer back into Haskell land.  There
+are then primitive operations with which you may merrily grab values
+over in C land, by indexing off the &ldquo;static&rdquo; pointer.
+</Para>
+</ListItem>
+</VarListEntry>
+<VarListEntry>
+<Term>&ldquo;Stable&rdquo; pointers:</Term>
+<ListItem>
+<Para>
+If, for some reason, you wish to hand a Haskell pointer (i.e.,
+<Emphasis>not</Emphasis> an unboxed value) to a C routine, you first make the
+pointer &ldquo;stable,&rdquo; so that the garbage collector won't forget that it
+exists.  That is, GHC provides a safe way to pass Haskell pointers to
+C.
+</Para>
+
+<Para>
+Please see <XRef LinkEnd="sec-stable-pointers"> for more details.
+</Para>
+</ListItem>
+</VarListEntry>
+<VarListEntry>
+<Term>&ldquo;Foreign objects&rdquo;:</Term>
+<ListItem>
+<Para>
+A &ldquo;foreign object&rdquo; is a safe way to pass an external object (a
+C-allocated pointer, say) to Haskell and have Haskell do the Right
+Thing when it no longer references the object.  So, for example, C
+could pass a large bitmap over to Haskell and say &ldquo;please free this
+memory when you're done with it.&rdquo;
+</Para>
+
+<Para>
+Please see <XRef LinkEnd="sec-ForeignObj"> for more details.
+</Para>
+</ListItem>
+</VarListEntry>
+</VariableList>
+</Para>
+
+<Para>
+The libraries documentatation gives more details on all these
+&ldquo;primitive array&rdquo; types and the operations on them.
+</Para>
+
+</Sect1>
+
+
+<Sect1 id="pattern-guards">
+<Title>Pattern guards</Title>
+
+<Para>
+<IndexTerm><Primary>Pattern guards (Glasgow extension)</Primary></IndexTerm>
+The discussion that follows is an abbreviated version of Simon Peyton Jones's original <ULink URL="http://research.microsoft.com/~simonpj/Haskell/guards.html">proposal</ULink>. (Note that the proposal was written before pattern guards were implemented, so refers to them as unimplemented.)
+</Para>
+
+<Para>
+Suppose we have an abstract data type of finite maps, with a
+lookup operation:
+
+<ProgramListing>
+lookup :: FiniteMap -> Int -> Maybe Int
+</ProgramListing>
+
+The lookup returns <Function>Nothing</Function> if the supplied key is not in the domain of the mapping, and <Function>(Just v)</Function> otherwise,
+where <VarName>v</VarName> is the value that the key maps to.  Now consider the following definition:
+</Para>
+
+<ProgramListing>
+clunky env var1 var2 | ok1 && ok2 = val1 + val2
+| otherwise  = var1 + var2
+where
+  m1 = lookup env var1
+  m2 = lookup env var2
+  ok1 = maybeToBool m1
+  ok2 = maybeToBool m2
+  val1 = expectJust m1
+  val2 = expectJust m2
+</ProgramListing>
+
+<Para>
+The auxiliary functions are 
+</Para>
+
+<ProgramListing>
+maybeToBool :: Maybe a -&gt; Bool
+maybeToBool (Just x) = True
+maybeToBool Nothing  = False
+
+expectJust :: Maybe a -&gt; a
+expectJust (Just x) = x
+expectJust Nothing  = error "Unexpected Nothing"
+</ProgramListing>
+
+<Para>
+What is <Function>clunky</Function> doing? The guard <Literal>ok1 &&
+ok2</Literal> checks that both lookups succeed, using
+<Function>maybeToBool</Function> to convert the <Function>Maybe</Function>
+types to booleans. The (lazily evaluated) <Function>expectJust</Function>
+calls extract the values from the results of the lookups, and binds the
+returned values to <VarName>val1</VarName> and <VarName>val2</VarName>
+respectively.  If either lookup fails, then clunky takes the
+<Literal>otherwise</Literal> case and returns the sum of its arguments.
+</Para>
+
+<Para>
+This is certainly legal Haskell, but it is a tremendously verbose and
+un-obvious way to achieve the desired effect.  Arguably, a more direct way
+to write clunky would be to use case expressions:
+</Para>
+
+<ProgramListing>
+clunky env var1 var1 = case lookup env var1 of
+  Nothing -&gt; fail
+  Just val1 -&gt; case lookup env var2 of
+    Nothing -&gt; fail
+    Just val2 -&gt; val1 + val2
+where
+  fail = val1 + val2
+</ProgramListing>
+
+<Para>
+This is a bit shorter, but hardly better.  Of course, we can rewrite any set
+of pattern-matching, guarded equations as case expressions; that is
+precisely what the compiler does when compiling equations! The reason that
+Haskell provides guarded equations is because they allow us to write down
+the cases we want to consider, one at a time, independently of each other. 
+This structure is hidden in the case version.  Two of the right-hand sides
+are really the same (<Function>fail</Function>), and the whole expression
+tends to become more and more indented. 
+</Para>
+
+<Para>
+Here is how I would write clunky:
+</Para>
+
+<ProgramListing>
+clunky env var1 var1
+  | Just val1 &lt;- lookup env var1
+  , Just val2 &lt;- lookup env var2
+  = val1 + val2
+...other equations for clunky...
+</ProgramListing>
+
+<Para>
+The semantics should be clear enough.  The qualifers are matched in order. 
+For a <Literal>&lt;-</Literal> qualifier, which I call a pattern guard, the
+right hand side is evaluated and matched against the pattern on the left. 
+If the match fails then the whole guard fails and the next equation is
+tried.  If it succeeds, then the appropriate binding takes place, and the
+next qualifier is matched, in the augmented environment.  Unlike list
+comprehensions, however, the type of the expression to the right of the
+<Literal>&lt;-</Literal> is the same as the type of the pattern to its
+left.  The bindings introduced by pattern guards scope over all the
+remaining guard qualifiers, and over the right hand side of the equation.
+</Para>
+
+<Para>
+Just as with list comprehensions, boolean expressions can be freely mixed
+with among the pattern guards.  For example:
+</Para>
+
+<ProgramListing>
+f x | [y] <- x
+    , y > 3
+    , Just z <- h y
+    = ...
+</ProgramListing>
+
+<Para>
+Haskell's current guards therefore emerge as a special case, in which the
+qualifier list has just one element, a boolean expression.
+</Para>
+</Sect1>
+
+  <sect1 id="sec-ffi">
+    <title>The foreign interface</title>
+
+    <para>The foreign interface consists of the following components:</para>
+
+    <itemizedlist>
+      <listitem>
+	<para>The Foreign Function Interface language specification
+	(included in this manual, in <xref linkend="ffi">).</para>
+      </listitem>
+
+      <listitem>
+	<para>The <literal>Foreign</literal> module (see <xref
+	linkend="sec-Foreign">) collects together several interfaces
+	which are useful in specifying foreign language
+	interfaces, including the following:</para>
+
+	<itemizedlist>
+	  <listitem>
+	    <para>The <literal>ForeignObj</literal> module (see <xref
+	    linkend="sec-ForeignObj">), for managing pointers from
+	    Haskell into the outside world.</para>
+	  </listitem>
+      
+	  <listitem>
+	    <para>The <literal>StablePtr</literal> module (see <xref
+	    linkend="sec-stable-pointers">), for managing pointers
+	    into Haskell from the outside world.</para>
+	  </listitem>
+      
+	  <listitem>
+	    <para>The <literal>CTypes</literal> module (see <xref
+	    linkend="sec-CTypes">) gives Haskell equivalents for the
+	    standard C datatypes, for use in making Haskell bindings
+	    to existing C libraries.</para>
+	  </listitem>
+      
+	  <listitem>
+	    <para>The <literal>CTypesISO</literal> module (see <xref
+	    linkend="sec-CTypesISO">) gives Haskell equivalents for C
+	    types defined by the ISO C standard.</para>
+	  </listitem>
+      
+	  <listitem>
+	    <para>The <literal>Storable</literal> library, for
+	    primitive marshalling of data types between Haskell and
+	    the foreign language.</para>
+	  </listitem>
+	</itemizedlist>
+
+      </listitem>
+    </itemizedlist>
+
+<para>The following sections also give some hints and tips on the use
+of the foreign function interface in GHC.</para>
+
+<Sect2 id="glasgow-foreign-headers">
+<Title>Using function headers
+</Title>
+
+<Para>
+<IndexTerm><Primary>C calls, function headers</Primary></IndexTerm>
+</Para>
+
+<Para>
+When generating C (using the <Option>-fvia-C</Option> directive), one can assist the
+C compiler in detecting type errors by using the <Command>-&num;include</Command> directive
+to provide <Filename>.h</Filename> files containing function headers.
+</Para>
+
+<Para>
+For example,
+</Para>
+
+<Para>
+
+<ProgramListing>
+#include "HsFFI.h"
+
+void         initialiseEFS (HsInt size);
+HsInt        terminateEFS (void);
+HsForeignObj emptyEFS(void);
+HsForeignObj updateEFS (HsForeignObj a, HsInt i, HsInt x);
+HsInt        lookupEFS (HsForeignObj a, HsInt i);
+</ProgramListing>
+</Para>
+
+      <para>The types <literal>HsInt</literal>,
+      <literal>HsForeignObj</literal> etc. are described in <xref
+      linkend="sec-mapping-table">.</Para>
+
+      <Para>Note that this approach is only
+      <Emphasis>essential</Emphasis> for returning
+      <Literal>float</Literal>s (or if <Literal>sizeof(int) !=
+      sizeof(int *)</Literal> on your architecture) but is a Good
+      Thing for anyone who cares about writing solid code.  You're
+      crazy not to do it.</Para>
+
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="multi-param-type-classes">
+<Title>Multi-parameter type classes
+</Title>
+
+<Para>
+This section documents GHC's implementation of multi-parameter type
+classes.  There's lots of background in the paper <ULink
+URL="http://research.microsoft.com/~simonpj/multi.ps.gz" >Type
+classes: exploring the design space</ULink > (Simon Peyton Jones, Mark
+Jones, Erik Meijer).
+</Para>
+
+<Para>
+I'd like to thank people who reported shorcomings in the GHC 3.02
+implementation.  Our default decisions were all conservative ones, and
+the experience of these heroic pioneers has given useful concrete
+examples to support several generalisations.  (These appear below as
+design choices not implemented in 3.02.)
+</Para>
+
+<Para>
+I've discussed these notes with Mark Jones, and I believe that Hugs
+will migrate towards the same design choices as I outline here.
+Thanks to him, and to many others who have offered very useful
+feedback.
+</Para>
+
+<Sect2>
+<Title>Types</Title>
+
+<Para>
+There are the following restrictions on the form of a qualified
+type:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  forall tv1..tvn (c1, ...,cn) => type
+</ProgramListing>
+
+</Para>
+
+<Para>
+(Here, I write the "foralls" explicitly, although the Haskell source
+language omits them; in Haskell 1.4, all the free type variables of an
+explicit source-language type signature are universally quantified,
+except for the class type variables in a class declaration.  However,
+in GHC, you can give the foralls if you want.  See <XRef LinkEnd="universal-quantification">).
+</Para>
+
+<Para>
+
+<OrderedList>
+<ListItem>
+
+<Para>
+ <Emphasis>Each universally quantified type variable
+<Literal>tvi</Literal> must be mentioned (i.e. appear free) in <Literal>type</Literal></Emphasis>.
+
+The reason for this is that a value with a type that does not obey
+this restriction could not be used without introducing
+ambiguity. Here, for example, is an illegal type:
+
+
+<ProgramListing>
+  forall a. Eq a => Int
+</ProgramListing>
+
+
+When a value with this type was used, the constraint <Literal>Eq tv</Literal>
+would be introduced where <Literal>tv</Literal> is a fresh type variable, and
+(in the dictionary-translation implementation) the value would be
+applied to a dictionary for <Literal>Eq tv</Literal>.  The difficulty is that we
+can never know which instance of <Literal>Eq</Literal> to use because we never
+get any more information about <Literal>tv</Literal>.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Emphasis>Every constraint <Literal>ci</Literal> must mention at least one of the
+universally quantified type variables <Literal>tvi</Literal></Emphasis>.
+
+For example, this type is OK because <Literal>C a b</Literal> mentions the
+universally quantified type variable <Literal>b</Literal>:
+
+
+<ProgramListing>
+  forall a. C a b => burble
+</ProgramListing>
+
+
+The next type is illegal because the constraint <Literal>Eq b</Literal> does not
+mention <Literal>a</Literal>:
+
+
+<ProgramListing>
+  forall a. Eq b => burble
+</ProgramListing>
+
+
+The reason for this restriction is milder than the other one.  The
+excluded types are never useful or necessary (because the offending
+context doesn't need to be witnessed at this point; it can be floated
+out).  Furthermore, floating them out increases sharing. Lastly,
+excluding them is a conservative choice; it leaves a patch of
+territory free in case we need it later.
+
+</Para>
+</ListItem>
+
+</OrderedList>
+
+</Para>
+
+<Para>
+These restrictions apply to all types, whether declared in a type signature
+or inferred.
+</Para>
+
+<Para>
+Unlike Haskell 1.4, constraints in types do <Emphasis>not</Emphasis> have to be of
+the form <Emphasis>(class type-variables)</Emphasis>.  Thus, these type signatures
+are perfectly OK
+</Para>
+
+<Para>
+
+<ProgramListing>
+  f :: Eq (m a) => [m a] -> [m a]
+  g :: Eq [a] => ...
+</ProgramListing>
+
+</Para>
+
+<Para>
+This choice recovers principal types, a property that Haskell 1.4 does not have.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Class declarations</Title>
+
+<Para>
+
+<OrderedList>
+<ListItem>
+
+<Para>
+ <Emphasis>Multi-parameter type classes are permitted</Emphasis>. For example:
+
+
+<ProgramListing>
+  class Collection c a where
+    union :: c a -> c a -> c a
+    ...etc.
+</ProgramListing>
+
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Emphasis>The class hierarchy must be acyclic</Emphasis>.  However, the definition
+of "acyclic" involves only the superclass relationships.  For example,
+this is OK:
+
+
+<ProgramListing>
+  class C a where {
+    op :: D b => a -> b -> b
+  }
+
+  class C a => D a where { ... }
+</ProgramListing>
+
+
+Here, <Literal>C</Literal> is a superclass of <Literal>D</Literal>, but it's OK for a
+class operation <Literal>op</Literal> of <Literal>C</Literal> to mention <Literal>D</Literal>.  (It
+would not be OK for <Literal>D</Literal> to be a superclass of <Literal>C</Literal>.)
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Emphasis>There are no restrictions on the context in a class declaration
+(which introduces superclasses), except that the class hierarchy must
+be acyclic</Emphasis>.  So these class declarations are OK:
+
+
+<ProgramListing>
+  class Functor (m k) => FiniteMap m k where
+    ...
+
+  class (Monad m, Monad (t m)) => Transform t m where
+    lift :: m a -> (t m) a
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Emphasis>In the signature of a class operation, every constraint
+must mention at least one type variable that is not a class type
+variable</Emphasis>.
+
+Thus:
+
+
+<ProgramListing>
+  class Collection c a where
+    mapC :: Collection c b => (a->b) -> c a -> c b
+</ProgramListing>
+
+
+is OK because the constraint <Literal>(Collection a b)</Literal> mentions
+<Literal>b</Literal>, even though it also mentions the class variable
+<Literal>a</Literal>.  On the other hand:
+
+
+<ProgramListing>
+  class C a where
+    op :: Eq a => (a,b) -> (a,b)
+</ProgramListing>
+
+
+is not OK because the constraint <Literal>(Eq a)</Literal> mentions on the class
+type variable <Literal>a</Literal>, but not <Literal>b</Literal>.  However, any such
+example is easily fixed by moving the offending context up to the
+superclass context:
+
+
+<ProgramListing>
+  class Eq a => C a where
+    op ::(a,b) -> (a,b)
+</ProgramListing>
+
+
+A yet more relaxed rule would allow the context of a class-op signature
+to mention only class type variables.  However, that conflicts with
+Rule 1(b) for types above.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Emphasis>The type of each class operation must mention <Emphasis>all</Emphasis> of
+the class type variables</Emphasis>.  For example:
+
+
+<ProgramListing>
+  class Coll s a where
+    empty  :: s
+    insert :: s -> a -> s
+</ProgramListing>
+
+
+is not OK, because the type of <Literal>empty</Literal> doesn't mention
+<Literal>a</Literal>.  This rule is a consequence of Rule 1(a), above, for
+types, and has the same motivation.
+
+Sometimes, offending class declarations exhibit misunderstandings.  For
+example, <Literal>Coll</Literal> might be rewritten
+
+
+<ProgramListing>
+  class Coll s a where
+    empty  :: s a
+    insert :: s a -> a -> s a
+</ProgramListing>
+
+
+which makes the connection between the type of a collection of
+<Literal>a</Literal>'s (namely <Literal>(s a)</Literal>) and the element type <Literal>a</Literal>.
+Occasionally this really doesn't work, in which case you can split the
+class like this:
+
+
+<ProgramListing>
+  class CollE s where
+    empty  :: s
+
+  class CollE s => Coll s a where
+    insert :: s -> a -> s
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+
+</OrderedList>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Instance declarations</Title>
+
+<Para>
+
+<OrderedList>
+<ListItem>
+
+<Para>
+ <Emphasis>Instance declarations may not overlap</Emphasis>.  The two instance
+declarations
+
+
+<ProgramListing>
+  instance context1 => C type1 where ...
+  instance context2 => C type2 where ...
+</ProgramListing>
+
+
+"overlap" if <Literal>type1</Literal> and <Literal>type2</Literal> unify
+
+However, if you give the command line option
+<Option>-fallow-overlapping-instances</Option><IndexTerm><Primary>-fallow-overlapping-instances
+option</Primary></IndexTerm> then two overlapping instance declarations are permitted
+iff
+
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ EITHER <Literal>type1</Literal> and <Literal>type2</Literal> do not unify
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ OR <Literal>type2</Literal> is a substitution instance of <Literal>type1</Literal>
+(but not identical to <Literal>type1</Literal>)
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ OR vice versa
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+
+Notice that these rules
+
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ make it clear which instance decl to use
+(pick the most specific one that matches)
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ do not mention the contexts <Literal>context1</Literal>, <Literal>context2</Literal>
+Reason: you can pick which instance decl
+"matches" based on the type.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+
+Regrettably, GHC doesn't guarantee to detect overlapping instance
+declarations if they appear in different modules.  GHC can "see" the
+instance declarations in the transitive closure of all the modules
+imported by the one being compiled, so it can "see" all instance decls
+when it is compiling <Literal>Main</Literal>.  However, it currently chooses not
+to look at ones that can't possibly be of use in the module currently
+being compiled, in the interests of efficiency.  (Perhaps we should
+change that decision, at least for <Literal>Main</Literal>.)
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Emphasis>There are no restrictions on the type in an instance
+<Emphasis>head</Emphasis>, except that at least one must not be a type variable</Emphasis>.
+The instance "head" is the bit after the "=>" in an instance decl. For
+example, these are OK:
+
+
+<ProgramListing>
+  instance C Int a where ...
+
+  instance D (Int, Int) where ...
+
+  instance E [[a]] where ...
+</ProgramListing>
+
+
+Note that instance heads <Emphasis>may</Emphasis> contain repeated type variables.
+For example, this is OK:
+
+
+<ProgramListing>
+  instance Stateful (ST s) (MutVar s) where ...
+</ProgramListing>
+
+
+The "at least one not a type variable" restriction is to ensure that
+context reduction terminates: each reduction step removes one type
+constructor.  For example, the following would make the type checker
+loop if it wasn't excluded:
+
+
+<ProgramListing>
+  instance C a => C a where ...
+</ProgramListing>
+
+
+There are two situations in which the rule is a bit of a pain. First,
+if one allows overlapping instance declarations then it's quite
+convenient to have a "default instance" declaration that applies if
+something more specific does not:
+
+
+<ProgramListing>
+  instance C a where
+    op = ... -- Default
+</ProgramListing>
+
+
+Second, sometimes you might want to use the following to get the
+effect of a "class synonym":
+
+
+<ProgramListing>
+  class (C1 a, C2 a, C3 a) => C a where { }
+
+  instance (C1 a, C2 a, C3 a) => C a where { }
+</ProgramListing>
+
+
+This allows you to write shorter signatures:
+
+
+<ProgramListing>
+  f :: C a => ...
+</ProgramListing>
+
+
+instead of
+
+
+<ProgramListing>
+  f :: (C1 a, C2 a, C3 a) => ...
+</ProgramListing>
+
+
+I'm on the lookout for a simple rule that preserves decidability while
+allowing these idioms.  The experimental flag
+<Option>-fallow-undecidable-instances</Option><IndexTerm><Primary>-fallow-undecidable-instances
+option</Primary></IndexTerm> lifts this restriction, allowing all the types in an
+instance head to be type variables.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Emphasis>Unlike Haskell 1.4, instance heads may use type
+synonyms</Emphasis>.  As always, using a type synonym is just shorthand for
+writing the RHS of the type synonym definition.  For example:
+
+
+<ProgramListing>
+  type Point = (Int,Int)
+  instance C Point   where ...
+  instance C [Point] where ...
+</ProgramListing>
+
+
+is legal.  However, if you added
+
+
+<ProgramListing>
+  instance C (Int,Int) where ...
+</ProgramListing>
+
+
+as well, then the compiler will complain about the overlapping
+(actually, identical) instance declarations.  As always, type synonyms
+must be fully applied.  You cannot, for example, write:
+
+
+<ProgramListing>
+  type P a = [[a]]
+  instance Monad P where ...
+</ProgramListing>
+
+
+This design decision is independent of all the others, and easily
+reversed, but it makes sense to me.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+<Emphasis>The types in an instance-declaration <Emphasis>context</Emphasis> must all
+be type variables</Emphasis>. Thus
+
+
+<ProgramListing>
+instance C a b => Eq (a,b) where ...
+</ProgramListing>
+
+
+is OK, but
+
+
+<ProgramListing>
+instance C Int b => Foo b where ...
+</ProgramListing>
+
+
+is not OK.  Again, the intent here is to make sure that context
+reduction terminates.
+
+Voluminous correspondence on the Haskell mailing list has convinced me
+that it's worth experimenting with a more liberal rule.  If you use
+the flag <Option>-fallow-undecidable-instances</Option> can use arbitrary
+types in an instance context.  Termination is ensured by having a
+fixed-depth recursion stack.  If you exceed the stack depth you get a
+sort of backtrace, and the opportunity to increase the stack depth
+with <Option>-fcontext-stack</Option><Emphasis>N</Emphasis>.
+
+</Para>
+</ListItem>
+
+</OrderedList>
+
+</Para>
+
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="universal-quantification">
+<Title>Explicit universal quantification
+</Title>
+
+<Para>
+GHC now allows you to write explicitly quantified types.  GHC's
+syntax for this now agrees with Hugs's, namely:
+</Para>
+
+<Para>
+
+<ProgramListing>
+        forall a b. (Ord a, Eq  b) => a -> b -> a
+</ProgramListing>
+
+</Para>
+
+<Para>
+The context is, of course, optional.  You can't use <Literal>forall</Literal> as
+a type variable any more!
+</Para>
+
+<Para>
+Haskell type signatures are implicitly quantified.  The <Literal>forall</Literal>
+allows us to say exactly what this means.  For example:
+</Para>
+
+<Para>
+
+<ProgramListing>
+        g :: b -> b
+</ProgramListing>
+
+</Para>
+
+<Para>
+means this:
+</Para>
+
+<Para>
+
+<ProgramListing>
+        g :: forall b. (b -> b)
+</ProgramListing>
+
+</Para>
+
+<Para>
+The two are treated identically.
+</Para>
+
+<Sect2 id="univ">
+<Title>Universally-quantified data type fields
+</Title>
+
+<Para>
+In a <Literal>data</Literal> or <Literal>newtype</Literal> declaration one can quantify
+the types of the constructor arguments.  Here are several examples:
+</Para>
+
+<Para>
+
+<ProgramListing>
+data T a = T1 (forall b. b -> b -> b) a
+
+data MonadT m = MkMonad { return :: forall a. a -> m a,
+                          bind   :: forall a b. m a -> (a -> m b) -> m b
+                        }
+
+newtype Swizzle = MkSwizzle (Ord a => [a] -> [a])
+</ProgramListing>
+
+</Para>
+
+<Para>
+The constructors now have so-called <Emphasis>rank 2</Emphasis> polymorphic
+types, in which there is a for-all in the argument types.:
+</Para>
+
+<Para>
+
+<ProgramListing>
+T1 :: forall a. (forall b. b -> b -> b) -> a -> T a
+MkMonad :: forall m. (forall a. a -> m a)
+                  -> (forall a b. m a -> (a -> m b) -> m b)
+                  -> MonadT m
+MkSwizzle :: (Ord a => [a] -> [a]) -> Swizzle
+</ProgramListing>
+
+</Para>
+
+<Para>
+Notice that you don't need to use a <Literal>forall</Literal> if there's an
+explicit context.  For example in the first argument of the
+constructor <Function>MkSwizzle</Function>, an implicit "<Literal>forall a.</Literal>" is
+prefixed to the argument type.  The implicit <Literal>forall</Literal>
+quantifies all type variables that are not already in scope, and are
+mentioned in the type quantified over.
+</Para>
+
+<Para>
+As for type signatures, implicit quantification happens for non-overloaded
+types too.  So if you write this:
+
+<ProgramListing>
+  data T a = MkT (Either a b) (b -> b)
+</ProgramListing>
+
+it's just as if you had written this:
+
+<ProgramListing>
+  data T a = MkT (forall b. Either a b) (forall b. b -> b)
+</ProgramListing>
+
+That is, since the type variable <Literal>b</Literal> isn't in scope, it's
+implicitly universally quantified.  (Arguably, it would be better
+to <Emphasis>require</Emphasis> explicit quantification on constructor arguments
+where that is what is wanted.  Feedback welcomed.)
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Construction </Title>
+
+<Para>
+You construct values of types <Literal>T1, MonadT, Swizzle</Literal> by applying
+the constructor to suitable values, just as usual.  For example,
+</Para>
+
+<Para>
+
+<ProgramListing>
+(T1 (\xy->x) 3) :: T Int
+
+(MkSwizzle sort)    :: Swizzle
+(MkSwizzle reverse) :: Swizzle
+
+(let r x = Just x
+     b m k = case m of
+                Just y -> k y
+                Nothing -> Nothing
+  in
+  MkMonad r b) :: MonadT Maybe
+</ProgramListing>
+
+</Para>
+
+<Para>
+The type of the argument can, as usual, be more general than the type
+required, as <Literal>(MkSwizzle reverse)</Literal> shows.  (<Function>reverse</Function>
+does not need the <Literal>Ord</Literal> constraint.)
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Pattern matching</Title>
+
+<Para>
+When you use pattern matching, the bound variables may now have
+polymorphic types.  For example:
+</Para>
+
+<Para>
+
+<ProgramListing>
+        f :: T a -> a -> (a, Char)
+        f (T1 f k) x = (f k x, f 'c' 'd')
+
+        g :: (Ord a, Ord b) => Swizzle -> [a] -> (a -> b) -> [b]
+        g (MkSwizzle s) xs f = s (map f (s xs))
+
+        h :: MonadT m -> [m a] -> m [a]
+        h m [] = return m []
+        h m (x:xs) = bind m x           $ \y ->
+                      bind m (h m xs)   $ \ys ->
+                      return m (y:ys)
+</ProgramListing>
+
+</Para>
+
+<Para>
+In the function <Function>h</Function> we use the record selectors <Literal>return</Literal>
+and <Literal>bind</Literal> to extract the polymorphic bind and return functions
+from the <Literal>MonadT</Literal> data structure, rather than using pattern
+matching.
+</Para>
+
+<Para>
+You cannot pattern-match against an argument that is polymorphic.
+For example:
+
+<ProgramListing>
+        newtype TIM s a = TIM (ST s (Maybe a))
+
+        runTIM :: (forall s. TIM s a) -> Maybe a
+        runTIM (TIM m) = runST m
+</ProgramListing>
+
+</Para>
+
+<Para>
+Here the pattern-match fails, because you can't pattern-match against
+an argument of type <Literal>(forall s. TIM s a)</Literal>.  Instead you
+must bind the variable and pattern match in the right hand side:
+
+<ProgramListing>
+        runTIM :: (forall s. TIM s a) -> Maybe a
+        runTIM tm = case tm of { TIM m -> runST m }
+</ProgramListing>
+
+The <Literal>tm</Literal> on the right hand side is (invisibly) instantiated, like
+any polymorphic value at its occurrence site, and now you can pattern-match
+against it.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>The partial-application restriction</Title>
+
+<Para>
+There is really only one way in which data structures with polymorphic
+components might surprise you: you must not partially apply them.
+For example, this is illegal:
+</Para>
+
+<Para>
+
+<ProgramListing>
+        map MkSwizzle [sort, reverse]
+</ProgramListing>
+
+</Para>
+
+<Para>
+The restriction is this: <Emphasis>every subexpression of the program must
+have a type that has no for-alls, except that in a function
+application (f e1&hellip;en) the partial applications are not subject to
+this rule</Emphasis>.  The restriction makes type inference feasible.
+</Para>
+
+<Para>
+In the illegal example, the sub-expression <Literal>MkSwizzle</Literal> has the
+polymorphic type <Literal>(Ord b => [b] -> [b]) -> Swizzle</Literal> and is not
+a sub-expression of an enclosing application.  On the other hand, this
+expression is OK:
+</Para>
+
+<Para>
+
+<ProgramListing>
+        map (T1 (\a b -> a)) [1,2,3]
+</ProgramListing>
+
+</Para>
+
+<Para>
+even though it involves a partial application of <Function>T1</Function>, because
+the sub-expression <Literal>T1 (\a b -> a)</Literal> has type <Literal>Int -> T
+Int</Literal>.
+</Para>
+
+</Sect2>
+
+<Sect2 id="sigs">
+<Title>Type signatures
+</Title>
+
+<Para>
+Once you have data constructors with universally-quantified fields, or
+constants such as <Constant>runST</Constant> that have rank-2 types, it isn't long
+before you discover that you need more!  Consider:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  mkTs f x y = [T1 f x, T1 f y]
+</ProgramListing>
+
+</Para>
+
+<Para>
+<Function>mkTs</Function> is a fuction that constructs some values of type
+<Literal>T</Literal>, using some pieces passed to it.  The trouble is that since
+<Literal>f</Literal> is a function argument, Haskell assumes that it is
+monomorphic, so we'll get a type error when applying <Function>T1</Function> to
+it.  This is a rather silly example, but the problem really bites in
+practice.  Lots of people trip over the fact that you can't make
+"wrappers functions" for <Constant>runST</Constant> for exactly the same reason.
+In short, it is impossible to build abstractions around functions with
+rank-2 types.
+</Para>
+
+<Para>
+The solution is fairly clear.  We provide the ability to give a rank-2
+type signature for <Emphasis>ordinary</Emphasis> functions (not only data
+constructors), thus:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  mkTs :: (forall b. b -> b -> b) -> a -> [T a]
+  mkTs f x y = [T1 f x, T1 f y]
+</ProgramListing>
+
+</Para>
+
+<Para>
+This type signature tells the compiler to attribute <Literal>f</Literal> with
+the polymorphic type <Literal>(forall b. b -> b -> b)</Literal> when type
+checking the body of <Function>mkTs</Function>, so now the application of
+<Function>T1</Function> is fine.
+</Para>
+
+<Para>
+There are two restrictions:
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ You can only define a rank 2 type, specified by the following
+grammar:
+
+
+<ProgramListing>
+rank2type ::= [forall tyvars .] [context =>] funty
+funty     ::= ([forall tyvars .] [context =>] ty) -> funty
+            | ty
+ty        ::= ...current Haskell monotype syntax...
+</ProgramListing>
+
+
+Informally, the universal quantification must all be right at the beginning,
+or at the top level of a function argument.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ There is a restriction on the definition of a function whose
+type signature is a rank-2 type: the polymorphic arguments must be
+matched on the left hand side of the "<Literal>=</Literal>" sign.  You can't
+define <Function>mkTs</Function> like this:
+
+
+<ProgramListing>
+mkTs :: (forall b. b -> b -> b) -> a -> [T a]
+mkTs = \ f x y -> [T1 f x, T1 f y]
+</ProgramListing>
+
+
+
+The same partial-application rule applies to ordinary functions with
+rank-2 types as applied to data constructors.
+
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+
+<Sect2 id="hoist">
+<Title>Type synonyms and hoisting
+</Title>
+
+<Para>
+GHC also allows you to write a <Literal>forall</Literal> in a type synonym, thus:
+<ProgramListing>
+  type Discard a = forall b. a -> b -> a
+
+  f :: Discard a
+  f x y = x
+</ProgramListing>
+However, it is often convenient to use these sort of synonyms at the right hand
+end of an arrow, thus:
+<ProgramListing>
+  type Discard a = forall b. a -> b -> a
+
+  g :: Int -> Discard Int
+  g x y z = x+y
+</ProgramListing>
+Simply expanding the type synonym would give
+<ProgramListing>
+  g :: Int -> (forall b. Int -> b -> Int)
+</ProgramListing>
+but GHC "hoists" the <Literal>forall</Literal> to give the isomorphic type
+<ProgramListing>
+  g :: forall b. Int -> Int -> b -> Int
+</ProgramListing>
+In general, the rule is this: <Emphasis>to determine the type specified by any explicit
+user-written type (e.g. in a type signature), GHC expands type synonyms and then repeatedly
+performs the transformation:</Emphasis>
+<ProgramListing>
+  <Emphasis>type1</Emphasis> -> forall a. <Emphasis>type2</Emphasis>
+==>
+  forall a. <Emphasis>type1</Emphasis> -> <Emphasis>type2</Emphasis>
+</ProgramListing>
+(In fact, GHC tries to retain as much synonym information as possible for use in
+error messages, but that is a usability issue.)  This rule applies, of course, whether
+or not the <Literal>forall</Literal> comes from a synonym. For example, here is another
+valid way to write <Literal>g</Literal>'s type signature:
+<ProgramListing>
+  g :: Int -> Int -> forall b. b -> Int
+</ProgramListing>
+</Para>
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="existential-quantification">
+<Title>Existentially quantified data constructors
+</Title>
+
+<Para>
+The idea of using existential quantification in data type declarations
+was suggested by Laufer (I believe, thought doubtless someone will
+correct me), and implemented in Hope+. It's been in Lennart
+Augustsson's <Command>hbc</Command> Haskell compiler for several years, and
+proved very useful.  Here's the idea.  Consider the declaration:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  data Foo = forall a. MkFoo a (a -> Bool)
+           | Nil
+</ProgramListing>
+
+</Para>
+
+<Para>
+The data type <Literal>Foo</Literal> has two constructors with types:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  MkFoo :: forall a. a -> (a -> Bool) -> Foo
+  Nil   :: Foo
+</ProgramListing>
+
+</Para>
+
+<Para>
+Notice that the type variable <Literal>a</Literal> in the type of <Function>MkFoo</Function>
+does not appear in the data type itself, which is plain <Literal>Foo</Literal>.
+For example, the following expression is fine:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  [MkFoo 3 even, MkFoo 'c' isUpper] :: [Foo]
+</ProgramListing>
+
+</Para>
+
+<Para>
+Here, <Literal>(MkFoo 3 even)</Literal> packages an integer with a function
+<Function>even</Function> that maps an integer to <Literal>Bool</Literal>; and <Function>MkFoo 'c'
+isUpper</Function> packages a character with a compatible function.  These
+two things are each of type <Literal>Foo</Literal> and can be put in a list.
+</Para>
+
+<Para>
+What can we do with a value of type <Literal>Foo</Literal>?.  In particular,
+what happens when we pattern-match on <Function>MkFoo</Function>?
+</Para>
+
+<Para>
+
+<ProgramListing>
+  f (MkFoo val fn) = ???
+</ProgramListing>
+
+</Para>
+
+<Para>
+Since all we know about <Literal>val</Literal> and <Function>fn</Function> is that they
+are compatible, the only (useful) thing we can do with them is to
+apply <Function>fn</Function> to <Literal>val</Literal> to get a boolean.  For example:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  f :: Foo -> Bool
+  f (MkFoo val fn) = fn val
+</ProgramListing>
+
+</Para>
+
+<Para>
+What this allows us to do is to package heterogenous values
+together with a bunch of functions that manipulate them, and then treat
+that collection of packages in a uniform manner.  You can express
+quite a bit of object-oriented-like programming this way.
+</Para>
+
+<Sect2 id="existential">
+<Title>Why existential?
+</Title>
+
+<Para>
+What has this to do with <Emphasis>existential</Emphasis> quantification?
+Simply that <Function>MkFoo</Function> has the (nearly) isomorphic type
+</Para>
+
+<Para>
+
+<ProgramListing>
+  MkFoo :: (exists a . (a, a -> Bool)) -> Foo
+</ProgramListing>
+
+</Para>
+
+<Para>
+But Haskell programmers can safely think of the ordinary
+<Emphasis>universally</Emphasis> quantified type given above, thereby avoiding
+adding a new existential quantification construct.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Type classes</Title>
+
+<Para>
+An easy extension (implemented in <Command>hbc</Command>) is to allow
+arbitrary contexts before the constructor.  For example:
+</Para>
+
+<Para>
+
+<ProgramListing>
+data Baz = forall a. Eq a => Baz1 a a
+         | forall b. Show b => Baz2 b (b -> b)
+</ProgramListing>
+
+</Para>
+
+<Para>
+The two constructors have the types you'd expect:
+</Para>
+
+<Para>
+
+<ProgramListing>
+Baz1 :: forall a. Eq a => a -> a -> Baz
+Baz2 :: forall b. Show b => b -> (b -> b) -> Baz
+</ProgramListing>
+
+</Para>
+
+<Para>
+But when pattern matching on <Function>Baz1</Function> the matched values can be compared
+for equality, and when pattern matching on <Function>Baz2</Function> the first matched
+value can be converted to a string (as well as applying the function to it).
+So this program is legal:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  f :: Baz -> String
+  f (Baz1 p q) | p == q    = "Yes"
+               | otherwise = "No"
+  f (Baz1 v fn)            = show (fn v)
+</ProgramListing>
+
+</Para>
+
+<Para>
+Operationally, in a dictionary-passing implementation, the
+constructors <Function>Baz1</Function> and <Function>Baz2</Function> must store the
+dictionaries for <Literal>Eq</Literal> and <Literal>Show</Literal> respectively, and
+extract it on pattern matching.
+</Para>
+
+<Para>
+Notice the way that the syntax fits smoothly with that used for
+universal quantification earlier.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Restrictions</Title>
+
+<Para>
+There are several restrictions on the ways in which existentially-quantified
+constructors can be use.
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ When pattern matching, each pattern match introduces a new,
+distinct, type for each existential type variable.  These types cannot
+be unified with any other type, nor can they escape from the scope of
+the pattern match.  For example, these fragments are incorrect:
+
+
+<ProgramListing>
+f1 (MkFoo a f) = a
+</ProgramListing>
+
+
+Here, the type bound by <Function>MkFoo</Function> "escapes", because <Literal>a</Literal>
+is the result of <Function>f1</Function>.  One way to see why this is wrong is to
+ask what type <Function>f1</Function> has:
+
+
+<ProgramListing>
+  f1 :: Foo -> a             -- Weird!
+</ProgramListing>
+
+
+What is this "<Literal>a</Literal>" in the result type? Clearly we don't mean
+this:
+
+
+<ProgramListing>
+  f1 :: forall a. Foo -> a   -- Wrong!
+</ProgramListing>
+
+
+The original program is just plain wrong.  Here's another sort of error
+
+
+<ProgramListing>
+  f2 (Baz1 a b) (Baz1 p q) = a==q
+</ProgramListing>
+
+
+It's ok to say <Literal>a==b</Literal> or <Literal>p==q</Literal>, but
+<Literal>a==q</Literal> is wrong because it equates the two distinct types arising
+from the two <Function>Baz1</Function> constructors.
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+You can't pattern-match on an existentially quantified
+constructor in a <Literal>let</Literal> or <Literal>where</Literal> group of
+bindings. So this is illegal:
+
+
+<ProgramListing>
+  f3 x = a==b where { Baz1 a b = x }
+</ProgramListing>
+
+
+You can only pattern-match
+on an existentially-quantified constructor in a <Literal>case</Literal> expression or
+in the patterns of a function definition.
+
+The reason for this restriction is really an implementation one.
+Type-checking binding groups is already a nightmare without
+existentials complicating the picture.  Also an existential pattern
+binding at the top level of a module doesn't make sense, because it's
+not clear how to prevent the existentially-quantified type "escaping".
+So for now, there's a simple-to-state restriction.  We'll see how
+annoying it is.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+You can't use existential quantification for <Literal>newtype</Literal>
+declarations.  So this is illegal:
+
+
+<ProgramListing>
+  newtype T = forall a. Ord a => MkT a
+</ProgramListing>
+
+
+Reason: a value of type <Literal>T</Literal> must be represented as a pair
+of a dictionary for <Literal>Ord t</Literal> and a value of type <Literal>t</Literal>.
+That contradicts the idea that <Literal>newtype</Literal> should have no
+concrete representation.  You can get just the same efficiency and effect
+by using <Literal>data</Literal> instead of <Literal>newtype</Literal>.  If there is no
+overloading involved, then there is more of a case for allowing
+an existentially-quantified <Literal>newtype</Literal>, because the <Literal>data</Literal>
+because the <Literal>data</Literal> version does carry an implementation cost,
+but single-field existentially quantified constructors aren't much
+use.  So the simple restriction (no existential stuff on <Literal>newtype</Literal>)
+stands, unless there are convincing reasons to change it.
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ You can't use <Literal>deriving</Literal> to define instances of a
+data type with existentially quantified data constructors.
+
+Reason: in most cases it would not make sense. For example:&num;
+
+<ProgramListing>
+data T = forall a. MkT [a] deriving( Eq )
+</ProgramListing>
+
+To derive <Literal>Eq</Literal> in the standard way we would need to have equality
+between the single component of two <Function>MkT</Function> constructors:
+
+<ProgramListing>
+instance Eq T where
+  (MkT a) == (MkT b) = ???
+</ProgramListing>
+
+But <VarName>a</VarName> and <VarName>b</VarName> have distinct types, and so can't be compared.
+It's just about possible to imagine examples in which the derived instance
+would make sense, but it seems altogether simpler simply to prohibit such
+declarations.  Define your own instances!
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="sec-assertions">
+<Title>Assertions
+<IndexTerm><Primary>Assertions</Primary></IndexTerm>
+</Title>
+
+<Para>
+If you want to make use of assertions in your standard Haskell code, you
+could define a function like the following:
+</Para>
+
+<Para>
+
+<ProgramListing>
+assert :: Bool -> a -> a
+assert False x = error "assertion failed!"
+assert _     x = x
+</ProgramListing>
+
+</Para>
+
+<Para>
+which works, but gives you back a less than useful error message --
+an assertion failed, but which and where?
+</Para>
+
+<Para>
+One way out is to define an extended <Function>assert</Function> function which also
+takes a descriptive string to include in the error message and
+perhaps combine this with the use of a pre-processor which inserts
+the source location where <Function>assert</Function> was used.
+</Para>
+
+<Para>
+Ghc offers a helping hand here, doing all of this for you. For every
+use of <Function>assert</Function> in the user's source:
+</Para>
+
+<Para>
+
+<ProgramListing>
+kelvinToC :: Double -> Double
+kelvinToC k = assert (k &gt;= 0.0) (k+273.15)
+</ProgramListing>
+
+</Para>
+
+<Para>
+Ghc will rewrite this to also include the source location where the
+assertion was made,
+</Para>
+
+<Para>
+
+<ProgramListing>
+assert pred val ==> assertError "Main.hs|15" pred val
+</ProgramListing>
+
+</Para>
+
+<Para>
+The rewrite is only performed by the compiler when it spots
+applications of <Function>Exception.assert</Function>, so you can still define and
+use your own versions of <Function>assert</Function>, should you so wish. If not,
+import <Literal>Exception</Literal> to make use <Function>assert</Function> in your code.
+</Para>
+
+<Para>
+To have the compiler ignore uses of assert, use the compiler option
+<Option>-fignore-asserts</Option>. <IndexTerm><Primary>-fignore-asserts option</Primary></IndexTerm> That is,
+expressions of the form <Literal>assert pred e</Literal> will be rewritten to <Literal>e</Literal>.
+</Para>
+
+<Para>
+Assertion failures can be caught, see the documentation for the
+<literal>Exception</literal> library (<xref linkend="sec-Exception">)
+for the details.
+</Para>
+
+</Sect1>
+
+<Sect1 id="scoped-type-variables">
+<Title>Scoped Type Variables
+</Title>
+
+<Para>
+A <Emphasis>pattern type signature</Emphasis> can introduce a <Emphasis>scoped type
+variable</Emphasis>.  For example
+</Para>
+
+<Para>
+
+<ProgramListing>
+f (xs::[a]) = ys ++ ys
+           where
+              ys :: [a]
+              ys = reverse xs
+</ProgramListing>
+
+</Para>
+
+<Para>
+The pattern <Literal>(xs::[a])</Literal> includes a type signature for <VarName>xs</VarName>.
+This brings the type variable <Literal>a</Literal> into scope; it scopes over
+all the patterns and right hand sides for this equation for <Function>f</Function>.
+In particular, it is in scope at the type signature for <VarName>y</VarName>.
+</Para>
+
+<Para>
+At ordinary type signatures, such as that for <VarName>ys</VarName>, any type variables
+mentioned in the type signature <Emphasis>that are not in scope</Emphasis> are
+implicitly universally quantified.  (If there are no type variables in
+scope, all type variables mentioned in the signature are universally
+quantified, which is just as in Haskell 98.)  In this case, since <VarName>a</VarName>
+is in scope, it is not universally quantified, so the type of <VarName>ys</VarName> is
+the same as that of <VarName>xs</VarName>.  In Haskell 98 it is not possible to declare
+a type for <VarName>ys</VarName>; a major benefit of scoped type variables is that
+it becomes possible to do so.
+</Para>
+
+<Para>
+Scoped type variables are implemented in both GHC and Hugs.  Where the
+implementations differ from the specification below, those differences
+are noted.
+</Para>
+
+<Para>
+So much for the basic idea.  Here are the details.
+</Para>
+
+<Sect2>
+<Title>Scope and implicit quantification</Title>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ All the type variables mentioned in the patterns for a single
+function definition equation, that are not already in scope,
+are brought into scope by the patterns.  We describe this set as
+the <Emphasis>type variables bound by the equation</Emphasis>.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ The type variables thus brought into scope may be mentioned
+in ordinary type signatures or pattern type signatures anywhere within
+their scope.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ In ordinary type signatures, any type variable mentioned in the
+signature that is in scope is <Emphasis>not</Emphasis> universally quantified.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Ordinary type signatures do not bring any new type variables
+into scope (except in the type signature itself!). So this is illegal:
+
+
+<ProgramListing>
+  f :: a -> a
+  f x = x::a
+</ProgramListing>
+
+
+It's illegal because <VarName>a</VarName> is not in scope in the body of <Function>f</Function>,
+so the ordinary signature <Literal>x::a</Literal> is equivalent to <Literal>x::forall a.a</Literal>;
+and that is an incorrect typing.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ There is no implicit universal quantification on pattern type
+signatures, nor may one write an explicit <Literal>forall</Literal> type in a pattern
+type signature.  The pattern type signature is a monotype.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+
+The type variables in the head of a <Literal>class</Literal> or <Literal>instance</Literal> declaration
+scope over the methods defined in the <Literal>where</Literal> part.  For example:
+
+
+<ProgramListing>
+  class C a where
+    op :: [a] -> a
+
+    op xs = let ys::[a]
+                ys = reverse xs
+            in
+            head ys
+</ProgramListing>
+
+
+(Not implemented in Hugs yet, Dec 98).
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Polymorphism</Title>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ Pattern type signatures are completely orthogonal to ordinary, separate
+type signatures.  The two can be used independently or together.  There is
+no scoping associated with the names of the type variables in a separate type signature.
+
+
+<ProgramListing>
+   f :: [a] -> [a]
+   f (xs::[b]) = reverse xs
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ The function must be polymorphic in the type variables
+bound by all its equations.  Operationally, the type variables bound
+by one equation must not:
+
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ Be unified with a type (such as <Literal>Int</Literal>, or <Literal>[a]</Literal>).
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Be unified with a type variable free in the environment.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Be unified with each other.  (They may unify with the type variables
+bound by another equation for the same function, of course.)
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+
+For example, the following all fail to type check:
+
+
+<ProgramListing>
+  f (x::a) (y::b) = [x,y]       -- a unifies with b
+
+  g (x::a) = x + 1::Int         -- a unifies with Int
+
+  h x = let k (y::a) = [x,y]    -- a is free in the
+        in k x                  -- environment
+
+  k (x::a) True    = ...        -- a unifies with Int
+  k (x::Int) False = ...
+
+  w :: [b] -> [b]
+  w (x::a) = x                  -- a unifies with [b]
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ The pattern-bound type variable may, however, be constrained
+by the context of the principal type, thus:
+
+
+<ProgramListing>
+  f (x::a) (y::a) = x+y*2
+</ProgramListing>
+
+
+gets the inferred type: <Literal>forall a. Num a =&gt; a -&gt; a -&gt; a</Literal>.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Result type signatures</Title>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ The result type of a function can be given a signature,
+thus:
+
+
+<ProgramListing>
+  f (x::a) :: [a] = [x,x,x]
+</ProgramListing>
+
+
+The final <Literal>:: [a]</Literal> after all the patterns gives a signature to the
+result type.  Sometimes this is the only way of naming the type variable
+you want:
+
+
+<ProgramListing>
+  f :: Int -> [a] -> [a]
+  f n :: ([a] -> [a]) = let g (x::a, y::a) = (y,x)
+                        in \xs -> map g (reverse xs `zip` xs)
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+Result type signatures are not yet implemented in Hugs.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Pattern signatures on other constructs</Title>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ A pattern type signature can be on an arbitrary sub-pattern, not
+just on a variable:
+
+
+<ProgramListing>
+  f ((x,y)::(a,b)) = (y,x) :: (b,a)
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Pattern type signatures, including the result part, can be used
+in lambda abstractions:
+
+
+<ProgramListing>
+  (\ (x::a, y) :: a -> x)
+</ProgramListing>
+
+
+Type variables bound by these patterns must be polymorphic in
+the sense defined above.
+For example:
+
+
+<ProgramListing>
+  f1 (x::c) = f1 x      -- ok
+  f2 = \(x::c) -> f2 x  -- not ok
+</ProgramListing>
+
+
+Here, <Function>f1</Function> is OK, but <Function>f2</Function> is not, because <VarName>c</VarName> gets unified
+with a type variable free in the environment, in this
+case, the type of <Function>f2</Function>, which is in the environment when
+the lambda abstraction is checked.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Pattern type signatures, including the result part, can be used
+in <Literal>case</Literal> expressions:
+
+
+<ProgramListing>
+  case e of { (x::a, y) :: a -> x }
+</ProgramListing>
+
+
+The pattern-bound type variables must, as usual,
+be polymorphic in the following sense: each case alternative,
+considered as a lambda abstraction, must be polymorphic.
+Thus this is OK:
+
+
+<ProgramListing>
+  case (True,False) of { (x::a, y) -> x }
+</ProgramListing>
+
+
+Even though the context is that of a pair of booleans,
+the alternative itself is polymorphic.  Of course, it is
+also OK to say:
+
+
+<ProgramListing>
+  case (True,False) of { (x::Bool, y) -> x }
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+To avoid ambiguity, the type after the &ldquo;<Literal>::</Literal>&rdquo; in a result
+pattern signature on a lambda or <Literal>case</Literal> must be atomic (i.e. a single
+token or a parenthesised type of some sort).  To see why,
+consider how one would parse this:
+
+
+<ProgramListing>
+  \ x :: a -> b -> x
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Pattern type signatures that bind new type variables
+may not be used in pattern bindings at all.
+So this is illegal:
+
+
+<ProgramListing>
+  f x = let (y, z::a) = x in ...
+</ProgramListing>
+
+
+But these are OK, because they do not bind fresh type variables:
+
+
+<ProgramListing>
+  f1 x            = let (y, z::Int) = x in ...
+  f2 (x::(Int,a)) = let (y, z::a)   = x in ...
+</ProgramListing>
+
+
+However a single variable is considered a degenerate function binding,
+rather than a degerate pattern binding, so this is permitted, even
+though it binds a type variable:
+
+
+<ProgramListing>
+  f :: (b->b) = \(x::b) -> x
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+Such degnerate function bindings do not fall under the monomorphism
+restriction.  Thus:
+</Para>
+
+<Para>
+
+<ProgramListing>
+  g :: a -> a -> Bool = \x y. x==y
+</ProgramListing>
+
+</Para>
+
+<Para>
+Here <Function>g</Function> has type <Literal>forall a. Eq a =&gt; a -&gt; a -&gt; Bool</Literal>, just as if
+<Function>g</Function> had a separate type signature.  Lacking a type signature, <Function>g</Function>
+would get a monomorphic type.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Existentials</Title>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ Pattern type signatures can bind existential type variables.
+For example:
+
+
+<ProgramListing>
+  data T = forall a. MkT [a]
+
+  f :: T -> T
+  f (MkT [t::a]) = MkT t3
+                 where
+                   t3::[a] = [t,t,t]
+</ProgramListing>
+
+
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="pragmas">
+<Title>Pragmas
+</Title>
+
+<Para>
+GHC supports several pragmas, or instructions to the compiler placed
+in the source code.  Pragmas don't affect the meaning of the program,
+but they might affect the efficiency of the generated code.
+</Para>
+
+<Sect2 id="inline-pragma">
+<Title>INLINE pragma
+
+<IndexTerm><Primary>INLINE pragma</Primary></IndexTerm>
+<IndexTerm><Primary>pragma, INLINE</Primary></IndexTerm></Title>
+
+<Para>
+GHC (with <Option>-O</Option>, as always) tries to inline (or &ldquo;unfold&rdquo;)
+functions/values that are &ldquo;small enough,&rdquo; thus avoiding the call
+overhead and possibly exposing other more-wonderful optimisations.
+</Para>
+
+<Para>
+You will probably see these unfoldings (in Core syntax) in your
+interface files.
+</Para>
+
+<Para>
+Normally, if GHC decides a function is &ldquo;too expensive&rdquo; to inline, it
+will not do so, nor will it export that unfolding for other modules to
+use.
+</Para>
+
+<Para>
+The sledgehammer you can bring to bear is the
+<Literal>INLINE</Literal><IndexTerm><Primary>INLINE pragma</Primary></IndexTerm> pragma, used thusly:
+
+<ProgramListing>
+key_function :: Int -> String -> (Bool, Double)
+
+#ifdef __GLASGOW_HASKELL__
+{-# INLINE key_function #-}
+#endif
+</ProgramListing>
+
+(You don't need to do the C pre-processor carry-on unless you're going
+to stick the code through HBC&mdash;it doesn't like <Literal>INLINE</Literal> pragmas.)
+</Para>
+
+<Para>
+The major effect of an <Literal>INLINE</Literal> pragma is to declare a function's
+&ldquo;cost&rdquo; to be very low.  The normal unfolding machinery will then be
+very keen to inline it.
+</Para>
+
+<Para>
+An <Literal>INLINE</Literal> pragma for a function can be put anywhere its type
+signature could be put.
+</Para>
+
+<Para>
+<Literal>INLINE</Literal> pragmas are a particularly good idea for the
+<Literal>then</Literal>/<Literal>return</Literal> (or <Literal>bind</Literal>/<Literal>unit</Literal>) functions in a monad.
+For example, in GHC's own <Literal>UniqueSupply</Literal> monad code, we have:
+
+<ProgramListing>
+#ifdef __GLASGOW_HASKELL__
+{-# INLINE thenUs #-}
+{-# INLINE returnUs #-}
+#endif
+</ProgramListing>
+
+</Para>
+
+</Sect2>
+
+<Sect2 id="noinline-pragma">
+<Title>NOINLINE pragma
+</Title>
+
+<Para>
+<IndexTerm><Primary>NOINLINE pragma</Primary></IndexTerm>
+<IndexTerm><Primary>pragma, NOINLINE</Primary></IndexTerm>
+</Para>
+
+<Para>
+The <Literal>NOINLINE</Literal> pragma does exactly what you'd expect: it stops the
+named function from being inlined by the compiler.  You shouldn't ever
+need to do this, unless you're very cautious about code size.
+</Para>
+
+</Sect2>
+
+<Sect2 id="specialize-pragma">
+<Title>SPECIALIZE pragma
+</Title>
+
+<Para>
+<IndexTerm><Primary>SPECIALIZE pragma</Primary></IndexTerm>
+<IndexTerm><Primary>pragma, SPECIALIZE</Primary></IndexTerm>
+<IndexTerm><Primary>overloading, death to</Primary></IndexTerm>
+</Para>
+
+<Para>
+(UK spelling also accepted.)  For key overloaded functions, you can
+create extra versions (NB: more code space) specialised to particular
+types.  Thus, if you have an overloaded function:
+</Para>
+
+<Para>
+
+<ProgramListing>
+hammeredLookup :: Ord key => [(key, value)] -> key -> value
+</ProgramListing>
+
+</Para>
+
+<Para>
+If it is heavily used on lists with <Literal>Widget</Literal> keys, you could
+specialise it as follows:
+
+<ProgramListing>
+{-# SPECIALIZE hammeredLookup :: [(Widget, value)] -> Widget -> value #-}
+</ProgramListing>
+
+</Para>
+
+<Para>
+To get very fancy, you can also specify a named function to use for
+the specialised value, by adding <Literal>= blah</Literal>, as in:
+
+<ProgramListing>
+{-# SPECIALIZE hammeredLookup :: ...as before... = blah #-}
+</ProgramListing>
+
+It's <Emphasis>Your Responsibility</Emphasis> to make sure that <Function>blah</Function> really
+behaves as a specialised version of <Function>hammeredLookup</Function>!!!
+</Para>
+
+<Para>
+NOTE: the <Literal>=blah</Literal> feature isn't implemented in GHC 4.xx.
+</Para>
+
+<Para>
+An example in which the <Literal>= blah</Literal> form will Win Big:
+
+<ProgramListing>
+toDouble :: Real a => a -> Double
+toDouble = fromRational . toRational
+
+{-# SPECIALIZE toDouble :: Int -> Double = i2d #-}
+i2d (I# i) = D# (int2Double# i) -- uses Glasgow prim-op directly
+</ProgramListing>
+
+The <Function>i2d</Function> function is virtually one machine instruction; the
+default conversion&mdash;via an intermediate <Literal>Rational</Literal>&mdash;is obscenely
+expensive by comparison.
+</Para>
+
+<Para>
+By using the US spelling, your <Literal>SPECIALIZE</Literal> pragma will work with
+HBC, too.  Note that HBC doesn't support the <Literal>= blah</Literal> form.
+</Para>
+
+<Para>
+A <Literal>SPECIALIZE</Literal> pragma for a function can be put anywhere its type
+signature could be put.
+</Para>
+
+</Sect2>
+
+<Sect2 id="specialize-instance-pragma">
+<Title>SPECIALIZE instance pragma
+</Title>
+
+<Para>
+<IndexTerm><Primary>SPECIALIZE pragma</Primary></IndexTerm>
+<IndexTerm><Primary>overloading, death to</Primary></IndexTerm>
+Same idea, except for instance declarations.  For example:
+
+<ProgramListing>
+instance (Eq a) => Eq (Foo a) where { ... usual stuff ... }
+
+{-# SPECIALIZE instance Eq (Foo [(Int, Bar)] #-}
+</ProgramListing>
+
+Compatible with HBC, by the way.
+</Para>
+
+</Sect2>
+
+<Sect2 id="line-pragma">
+<Title>LINE pragma
+</Title>
+
+<Para>
+<IndexTerm><Primary>LINE pragma</Primary></IndexTerm>
+<IndexTerm><Primary>pragma, LINE</Primary></IndexTerm>
+</Para>
+
+<Para>
+This pragma is similar to C's <Literal>&num;line</Literal> pragma, and is mainly for use in
+automatically generated Haskell code.  It lets you specify the line
+number and filename of the original code; for example
+</Para>
+
+<Para>
+
+<ProgramListing>
+{-# LINE 42 "Foo.vhs" #-}
+</ProgramListing>
+
+</Para>
+
+<Para>
+if you'd generated the current file from something called <Filename>Foo.vhs</Filename>
+and this line corresponds to line 42 in the original.  GHC will adjust
+its error messages to refer to the line/file named in the <Literal>LINE</Literal>
+pragma.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>RULES pragma</Title>
+
+<Para>
+The RULES pragma lets you specify rewrite rules.  It is described in
+<XRef LinkEnd="rewrite-rules">.
+</Para>
+
+</Sect2>
+
+</Sect1>
+
+<Sect1 id="rewrite-rules">
+<Title>Rewrite rules
+
+<IndexTerm><Primary>RULES pagma</Primary></IndexTerm>
+<IndexTerm><Primary>pragma, RULES</Primary></IndexTerm>
+<IndexTerm><Primary>rewrite rules</Primary></IndexTerm></Title>
+
+<Para>
+The programmer can specify rewrite rules as part of the source program
+(in a pragma).  GHC applies these rewrite rules wherever it can.
+</Para>
+
+<Para>
+Here is an example:
+
+<ProgramListing>
+  {-# RULES
+        "map/map"       forall f g xs. map f (map g xs) = map (f.g) xs
+  #-}
+</ProgramListing>
+
+</Para>
+
+<Sect2>
+<Title>Syntax</Title>
+
+<Para>
+From a syntactic point of view:
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ Each rule has a name, enclosed in double quotes.  The name itself has
+no significance at all.  It is only used when reporting how many times the rule fired.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ There may be zero or more rules in a <Literal>RULES</Literal> pragma.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Layout applies in a <Literal>RULES</Literal> pragma.  Currently no new indentation level
+is set, so you must lay out your rules starting in the same column as the
+enclosing definitions.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Each variable mentioned in a rule must either be in scope (e.g. <Function>map</Function>),
+or bound by the <Literal>forall</Literal> (e.g. <Function>f</Function>, <Function>g</Function>, <Function>xs</Function>).  The variables bound by
+the <Literal>forall</Literal> are called the <Emphasis>pattern</Emphasis> variables.  They are separated
+by spaces, just like in a type <Literal>forall</Literal>.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ A pattern variable may optionally have a type signature.
+If the type of the pattern variable is polymorphic, it <Emphasis>must</Emphasis> have a type signature.
+For example, here is the <Literal>foldr/build</Literal> rule:
+
+<ProgramListing>
+"fold/build"  forall k z (g::forall b. (a->b->b) -> b -> b) .
+              foldr k z (build g) = g k z
+</ProgramListing>
+
+Since <Function>g</Function> has a polymorphic type, it must have a type signature.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+The left hand side of a rule must consist of a top-level variable applied
+to arbitrary expressions.  For example, this is <Emphasis>not</Emphasis> OK:
+
+<ProgramListing>
+"wrong1"   forall e1 e2.  case True of { True -> e1; False -> e2 } = e1
+"wrong2"   forall f.      f True = True
+</ProgramListing>
+
+In <Literal>"wrong1"</Literal>, the LHS is not an application; in <Literal>"wrong1"</Literal>, the LHS has a pattern variable
+in the head.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ A rule does not need to be in the same module as (any of) the
+variables it mentions, though of course they need to be in scope.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Rules are automatically exported from a module, just as instance declarations are.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Semantics</Title>
+
+<Para>
+From a semantic point of view:
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+Rules are only applied if you use the <Option>-O</Option> flag.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+ Rules are regarded as left-to-right rewrite rules.
+When GHC finds an expression that is a substitution instance of the LHS
+of a rule, it replaces the expression by the (appropriately-substituted) RHS.
+By "a substitution instance" we mean that the LHS can be made equal to the
+expression by substituting for the pattern variables.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ The LHS and RHS of a rule are typechecked, and must have the
+same type.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ GHC makes absolutely no attempt to verify that the LHS and RHS
+of a rule have the same meaning.  That is undecideable in general, and
+infeasible in most interesting cases.  The responsibility is entirely the programmer's!
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ GHC makes no attempt to make sure that the rules are confluent or
+terminating.  For example:
+
+<ProgramListing>
+  "loop"        forall x,y.  f x y = f y x
+</ProgramListing>
+
+This rule will cause the compiler to go into an infinite loop.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ If more than one rule matches a call, GHC will choose one arbitrarily to apply.
+
+</Para>
+</ListItem>
+<ListItem>
+<Para>
+ GHC currently uses a very simple, syntactic, matching algorithm
+for matching a rule LHS with an expression.  It seeks a substitution
+which makes the LHS and expression syntactically equal modulo alpha
+conversion.  The pattern (rule), but not the expression, is eta-expanded if
+necessary.  (Eta-expanding the epression can lead to laziness bugs.)
+But not beta conversion (that's called higher-order matching).
+</Para>
+
+<Para>
+Matching is carried out on GHC's intermediate language, which includes
+type abstractions and applications.  So a rule only matches if the
+types match too.  See <XRef LinkEnd="rule-spec"> below.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ GHC keeps trying to apply the rules as it optimises the program.
+For example, consider:
+
+<ProgramListing>
+  let s = map f
+      t = map g
+  in
+  s (t xs)
+</ProgramListing>
+
+The expression <Literal>s (t xs)</Literal> does not match the rule <Literal>"map/map"</Literal>, but GHC
+will substitute for <VarName>s</VarName> and <VarName>t</VarName>, giving an expression which does match.
+If <VarName>s</VarName> or <VarName>t</VarName> was (a) used more than once, and (b) large or a redex, then it would
+not be substituted, and the rule would not fire.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ In the earlier phases of compilation, GHC inlines <Emphasis>nothing
+that appears on the LHS of a rule</Emphasis>, because once you have substituted
+for something you can't match against it (given the simple minded
+matching).  So if you write the rule
+
+<ProgramListing>
+        "map/map"       forall f,g.  map f . map g = map (f.g)
+</ProgramListing>
+
+this <Emphasis>won't</Emphasis> match the expression <Literal>map f (map g xs)</Literal>.
+It will only match something written with explicit use of ".".
+Well, not quite.  It <Emphasis>will</Emphasis> match the expression
+
+<ProgramListing>
+wibble f g xs
+</ProgramListing>
+
+where <Function>wibble</Function> is defined:
+
+<ProgramListing>
+wibble f g = map f . map g
+</ProgramListing>
+
+because <Function>wibble</Function> will be inlined (it's small).
+
+Later on in compilation, GHC starts inlining even things on the
+LHS of rules, but still leaves the rules enabled.  This inlining
+policy is controlled by the per-simplification-pass flag <Option>-finline-phase</Option><Emphasis>n</Emphasis>.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ All rules are implicitly exported from the module, and are therefore
+in force in any module that imports the module that defined the rule, directly
+or indirectly.  (That is, if A imports B, which imports C, then C's rules are
+in force when compiling A.)  The situation is very similar to that for instance
+declarations.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>List fusion</Title>
+
+<Para>
+The RULES mechanism is used to implement fusion (deforestation) of common list functions.
+If a "good consumer" consumes an intermediate list constructed by a "good producer", the
+intermediate list should be eliminated entirely.
+</Para>
+
+<Para>
+The following are good producers:
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ List comprehensions
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Enumerations of <Literal>Int</Literal> and <Literal>Char</Literal> (e.g. <Literal>['a'..'z']</Literal>).
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Explicit lists (e.g. <Literal>[True, False]</Literal>)
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ The cons constructor (e.g <Literal>3:4:[]</Literal>)
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>++</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>map</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>filter</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>iterate</Function>, <Function>repeat</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>zip</Function>, <Function>zipWith</Function>
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+The following are good consumers:
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ List comprehensions
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>array</Function> (on its second argument)
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>length</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>++</Function> (on its first argument)
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>map</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>filter</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>concat</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>unzip</Function>, <Function>unzip2</Function>, <Function>unzip3</Function>, <Function>unzip4</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>zip</Function>, <Function>zipWith</Function> (but on one argument only; if both are good producers, <Function>zip</Function>
+will fuse with one but not the other)
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>partition</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>head</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>and</Function>, <Function>or</Function>, <Function>any</Function>, <Function>all</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>sequence&lowbar;</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>msum</Function>
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ <Function>sortBy</Function>
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+So, for example, the following should generate no intermediate lists:
+
+<ProgramListing>
+array (1,10) [(i,i*i) | i &#60;- map (+ 1) [0..9]]
+</ProgramListing>
+
+</Para>
+
+<Para>
+This list could readily be extended; if there are Prelude functions that you use
+a lot which are not included, please tell us.
+</Para>
+
+<Para>
+If you want to write your own good consumers or producers, look at the
+Prelude definitions of the above functions to see how to do so.
+</Para>
+
+</Sect2>
+
+<Sect2 id="rule-spec">
+<Title>Specialisation
+</Title>
+
+<Para>
+Rewrite rules can be used to get the same effect as a feature
+present in earlier version of GHC:
+
+<ProgramListing>
+  {-# SPECIALIZE fromIntegral :: Int8 -> Int16 = int8ToInt16 #-}
+</ProgramListing>
+
+This told GHC to use <Function>int8ToInt16</Function> instead of <Function>fromIntegral</Function> whenever
+the latter was called with type <Literal>Int8 -&gt; Int16</Literal>.  That is, rather than
+specialising the original definition of <Function>fromIntegral</Function> the programmer is
+promising that it is safe to use <Function>int8ToInt16</Function> instead.
+</Para>
+
+<Para>
+This feature is no longer in GHC.  But rewrite rules let you do the
+same thing:
+
+<ProgramListing>
+{-# RULES
+  "fromIntegral/Int8/Int16" fromIntegral = int8ToInt16
+#-}
+</ProgramListing>
+
+This slightly odd-looking rule instructs GHC to replace <Function>fromIntegral</Function>
+by <Function>int8ToInt16</Function> <Emphasis>whenever the types match</Emphasis>.  Speaking more operationally,
+GHC adds the type and dictionary applications to get the typed rule
+
+<ProgramListing>
+forall (d1::Integral Int8) (d2::Num Int16) .
+        fromIntegral Int8 Int16 d1 d2 = int8ToInt16
+</ProgramListing>
+
+What is more,
+this rule does not need to be in the same file as fromIntegral,
+unlike the <Literal>SPECIALISE</Literal> pragmas which currently do (so that they
+have an original definition available to specialise).
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Controlling what's going on</Title>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ Use <Option>-ddump-rules</Option> to see what transformation rules GHC is using.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Use <Option>-ddump-simpl-stats</Option> to see what rules are being fired.
+If you add <Option>-dppr-debug</Option> you get a more detailed listing.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ The defintion of (say) <Function>build</Function> in <FileName>PrelBase.lhs</FileName> looks llike this:
+
+<ProgramListing>
+        build   :: forall a. (forall b. (a -> b -> b) -> b -> b) -> [a]
+        {-# INLINE build #-}
+        build g = g (:) []
+</ProgramListing>
+
+Notice the <Literal>INLINE</Literal>!  That prevents <Literal>(:)</Literal> from being inlined when compiling
+<Literal>PrelBase</Literal>, so that an importing module will &ldquo;see&rdquo; the <Literal>(:)</Literal>, and can
+match it on the LHS of a rule.  <Literal>INLINE</Literal> prevents any inlining happening
+in the RHS of the <Literal>INLINE</Literal> thing.  I regret the delicacy of this.
+
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ In <Filename>ghc/lib/std/PrelBase.lhs</Filename> look at the rules for <Function>map</Function> to
+see how to write rules that will do fusion and yet give an efficient
+program even if fusion doesn't happen.  More rules in <Filename>PrelList.lhs</Filename>.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+</Sect1>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("users_guide.sgml" "book" "chapter" "sect1") ***
+     ;;; End: ***
+ -->

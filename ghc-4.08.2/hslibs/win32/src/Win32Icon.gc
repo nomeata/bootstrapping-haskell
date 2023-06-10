@@ -1,0 +1,30 @@
+module Win32Icon where
+
+import StdDIS
+import Win32Types
+import GDITypes
+
+%#include <windows.h>
+%#include "errors.h"
+%#include "win32debug.h"
+%#include "finalizers.h"
+
+----------------------------------------------------------------
+-- Icons
+----------------------------------------------------------------
+
+%fun CopyIcon :: HICON -> IO HICON
+%fail { res1 == 0 } { ErrorString("CopyIcon") }
+
+%fun DrawIcon :: HDC -> Int -> Int -> HICON -> IO ()
+%code BOOL success = DrawIcon(arg1, arg2, arg3, arg4);
+%fail { !success } { ErrorString("DrawIcon") }
+
+%fun DestroyIcon :: HICON -> IO ()
+%code BOOL success = DestroyIcon(arg1);
+%fail { !success } { ErrorString("DestroyIcon") }
+
+----------------------------------------------------------------
+-- End
+----------------------------------------------------------------
+

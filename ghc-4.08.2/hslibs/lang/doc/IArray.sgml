@@ -1,0 +1,114 @@
+<sect1 id="sec-IArray">
+  <title><literal>IArray</literal></title>
+  <indexterm><primary>IArray</primary><secondary>module</secondary></indexterm>
+
+  <para> This module provides a family of immutable array data types,
+  and is intended to be a replacement for Haskell's standard
+  <literal>Array</literal> module.  In addition, a family of mutable
+  array types is provided by the <literal>MArray</literal> module (see
+  <xref linkend="sec-MArray">). </para>
+
+  <sect2> 
+    <title><literal>IArray</literal> and <literal>HasBounds</literal> type
+classes</title>
+    <indexterm><primary>IArray</primary><secondary>class</secondary></indexterm>
+    <indexterm><primary>HasBounds</primary><secondary>class</secondary></indexterm>
+    <para>Two new type classes are provided,
+    <literal>HasBounds</literal> and <literal>IArray</literal>:</para>
+
+<screen>
+  class HasBounds a where
+     bounds :: Ix ix => a ix e -> (ix,ix)
+
+  class HasBounds a => IArray a e where
+     (!)     :: Ix ix => a ix e -> ix -> e
+     array   :: Ix ix => (ix,ix) -> [(ix,e)] -> a ix e	
+
+  instance HasBounds (Array.Array)
+  instance IArray Array.Array e
+</screen>
+
+    <para> where the type variable <literal>a</literal> denotes the
+    array type constructor, <literal>ix</literal> denotes the index
+    type, and <literal>e</literal> is the element type.</para>
+
+    <para>The <literal>Array</literal>, <literal>(!)</literal>, and
+    <literal>bounds</literal> methods provided are exactly analoguous
+    to those provided by the Haskell 98 <literal>Array</literal>
+    module, and indeed instances of <literal>HasBounds</literal> and
+    <literal>IArray</literal> are provided for the standard
+    <literal>Array</literal> type.</para>
+
+  </sect2>
+
+  <sect2>
+    <title><literal>UArray</literal>: immutable unboxed arrays</title>
+    <indexterm><primary><literal>UArray</literal></primary><secondary>datatype</secondary>
+    </indexterm>
+
+    <para>The <literal>UArray</literal> type is a flat, strict,
+    unboxed array type, which has instances of
+    <literal>IArray</literal> for common integral element types:</para>
+
+<screen>
+  data UArray ix e
+  instance HasBounds UArray
+  instance IArray UArray Char
+  instance IArray UArray Int
+  instance IArray UArray Word
+  instance IArray UArray Addr
+  instance IArray UArray Float
+  instance IArray UArray Double
+</screen>
+
+    <para>The idea here is that any code which currently uses a
+    standard non-strict polymorphic <literal>Array</literal> with one
+    of these element types can be easily converted to use
+    <literal>UArray</literal> by simply importing
+    <literal>IArray</literal> and changing the type of the array from
+    <literal>Array</literal> to <literal>UArray</literal>.  The
+    application will then get the performance benefit of strict
+    unboxed arrays, whithout making significant changes to the
+    existing code.</para>
+
+  </sect2>
+
+  <sect2>
+    <title>Useful combinators</title>
+
+    <para>The <literal>IArray</literal> module also provides versions
+    of the standard array combinators from Haskell 98's
+    <literal>Array</literal> module:</para>
+
+<screen>
+  assocs     :: (Ix ix, IArray a e) => a ix e -> [(ix,e)]
+
+  indices    :: (Ix ix, IArray a e) => a ix e -> [ix]
+
+  (//)       :: (Ix ix, IArray a e) => a ix e -> [(ix,e)] -> a ix e
+
+  listArray  :: (Ix ix, IArray a e) => (ix,ix) -> [e] -> a ix e
+
+  elems      :: (Ix ix, IArray a e) => a ix e -> [e]
+  
+  amap       :: (Ix ix, IArray a x, IArray a y) => 
+  		   (x -> y) -> a ix x -> a ix y
+
+  accum      :: (Ix ix, IArray a e) => 
+  		   (e->f->e) -> a ix e -> [(ix,f)] -> a ix e
+
+  accumArray :: (Ix ix, IArray a e) => 
+  		   (e->f->e) -> e -> (ix,ix) -> [(ix,f)] -> a ix e
+
+  ixmap      :: (Ix ix, Ix iy) => 
+  		  (ix,ix) -> (ix->iy) -> a iy e -> a ix e
+</screen>
+  </sect2>
+</sect1>
+
+<!-- Emacs stuff:
+     ;;; Local Variables: ***
+     ;;; mode: sgml ***
+     ;;; sgml-parent-document: ("../../doc/hslibs.sgml" "book" "chapter" "sect1") ***
+     ;;; End: ***
+ -->

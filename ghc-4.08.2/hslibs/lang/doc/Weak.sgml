@@ -1,0 +1,439 @@
+
+<Sect1 id="sec-Weak">
+<Title><literal>Weak</literal><IndexTerm><Primary>Weak</Primary></IndexTerm>
+</Title>
+
+<Para>
+The <Literal>Weak</Literal> library provides a "weak pointer" abstraction, giving
+the user some control over the garbage collection of specified
+objects, and allowing objects to be "finalized" with an arbitrary
+Haskell IO computation when they die.
+</Para>
+
+<Para>
+Weak pointers partially replace the old foreign object interface, as
+we will explain later.
+</Para>
+
+<Sect2>
+<Title>Module Signature</Title>
+
+<Para>
+
+<ProgramListing>
+module Weak (
+	Weak,	    		-- abstract
+	-- instance Eq (Weak v)  
+
+	mkWeak,      		-- :: k -&#62; v -&#62; Maybe (IO ()) -&#62; IO (Weak v)
+	deRefWeak, 		-- :: Weak v -&#62; IO (Maybe v)
+	finalize,		-- :: Weak v -&#62; IO ()
+
+	-- Not yet implemented
+	-- replaceFinalizer	-- :: Weak v -&#62; IO () -&#62; IO ()
+
+	mkWeakPtr, 		-- :: k -&#62; Maybe (IO ()) -&#62; IO (Weak k)
+	mkWeakPair, 		-- :: k -&#62; v -&#62; Maybe (IO ()) -&#62; IO (Weak (k,v))
+	addFinalizer, 		-- :: k -&#62; IO () -&#62; IO ()
+	addForeignFinalizer 	-- :: ForeignObj -&#62; IO () -&#62; IO ()
+   ) where
+</ProgramListing>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>Weak pointers</Title>
+
+<Para>
+In general terms, a weak pointer is a reference to an object that is
+not followed by the garbage collector --- that is, the existence of a
+weak pointer to an object has no effect on the lifetime of that
+object.  A weak pointer can be de-referenced to find out
+whether the object it refers to is still alive or not, and if so
+to return the object itself.
+</Para>
+
+<Para>
+Weak pointers are particularly useful for caches and memo tables.
+To build a memo table, you build a data structure 
+mapping from the function argument (the key) to its result (the
+value).  When you apply the function to a new argument you first
+check whether the key/value pair is already in the memo table.
+The key point is that the memo table itself should not keep the
+key and value alive.  So the table should contain a weak pointer
+to the key, not an ordinary pointer.  The pointer to the value must
+not be weak, because the only reference to the value might indeed be
+from the memo table.   
+</Para>
+
+<Para>
+So it looks as if the memo table will keep all its values
+alive for ever.  One way to solve this is to purge the table
+occasionally, by deleting entries whose keys have died.
+</Para>
+
+<Para>
+The weak pointers in this library
+support another approach, called <Emphasis>finalization</Emphasis>.
+When the key referred to by a weak pointer dies, the storage manager
+arranges to run a programmer-specified finalizer.  In the case of memo
+tables, for example, the finalizer could remove the key/value pair
+from the memo table.  
+</Para>
+
+<Para>
+Another difficulty with the memo table is that the value of a
+key/value pair might itself contain a pointer to the key.
+So the memo table keeps the value alive, which keeps the key alive,
+even though there may be no other references to the key so both should
+die.  The weak pointers in this library provide a slight 
+generalisation of the basic weak-pointer idea, in which each
+weak pointer actually contains both a key and a value.
+We describe this in more detail below.
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>The simple interface</Title>
+
+<Para>
+
+<ProgramListing>
+mkWeakPtr    :: a -&#62; Maybe (IO ()) -&#62; IO (Weak a)
+deRefWeak    :: Weak a -&#62; IO (Maybe a)
+addFinalizer :: a -&#62; IO () -&#62; IO ()
+</ProgramListing>
+
+</Para>
+
+<Para>
+<Function>mkWeakPtr</Function> takes a value of any type <Literal>a</Literal>, and maybe a finalizer
+of type <Literal>IO ()</Literal>, and returns a weak pointer object referring to the
+value, of type <Literal>Weak a</Literal>.  It is in the <Literal>IO</Literal> monad because it has
+the side effect of arranging that the finalizer (if there is one) will
+be run when the object dies.  In what follows, a ``weak pointer
+object'', or ``weak pointer'' for short, means precisely ``a Haskell
+value of type <Literal>Weak t</Literal>'' for some type <Literal>t</Literal>.  A weak pointer
+(object) is a first-class Haskell value; it can be passed to
+functions, stored in data structures, and so on.
+</Para>
+
+<Para>
+<Function>deRefWeak</Function> dereferences a weak pointer, returning <Literal>Just v</Literal> if
+the value is still alive.  If the key has already died, then
+<Function>deRefWeak</Function> returns <Literal>Nothing</Literal>; that's why it's in the <Literal>IO</Literal>
+monad&mdash;the return value of <Function>deRefWeak</Function> depends on when the garbage
+collector runs.
+</Para>
+
+<Para>
+<Function>addFinalizer</Function> is just another name for <Function>mkWeakPtr</Function> except that
+it throws the weak pointer itself away.  (The runtime system will
+remember that the weak pointer and hence the finalizer exists even if
+the program has forgotten it.)
+</Para>
+
+<Para>
+
+<ProgramListing>
+addFinalizer :: a -&#62; IO () -&#62; IO ()
+addFinalizer v f = do { mkWeakPtr v f; return () }
+</ProgramListing>
+
+</Para>
+
+<Para>
+The effect of <Function>addFinalizer</Function> is simply that the finalizer runs when
+the referenced object dies.
+</Para>
+
+<Para>
+The following properties hold:
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+<Function>deRefWeak</Function> returns the original object until
+that object is considered dead; it returns <Literal>Nothing</Literal>
+subsequently.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+Every finalizer will eventually be run, exactly once, either
+soon after the object dies, or at the end of the program.
+There is no requirement for the programmer to hold onto the
+weak pointer itself; finalization is completely unaffected by
+whether the weak pointer itself is alive.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+There may be multiple weak pointers to a single object.
+In this case, the finalizers for each of these weak pointers will
+all be run in some arbitrary order, or perhaps concurrently,
+when the object dies.  If the programmer specifies a finalizer that
+assumes it has the only reference to an object
+(for example, a file that it wishes to close), then the programmer
+must ensure that there is only one such finalizer.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+The storage manager attempts to run the finalizer(s) for an
+object soon after the object dies, but promptness is not guaranteed.
+(What is guaranteed is that the finalizer will
+eventually run, exactly once.)
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+At the moment when a finalizer is run, a call to <Function>deRefWeak</Function>
+will return <Literal>Nothing</Literal>.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+A finalizer may contain a pointer to the object, but that pointer
+will not keep the object alive.  For example:
+
+<ProgramListing>
+f :: Show a =&#62; a -&#62; IO a
+f x = addFinalizer x (print (show x))
+</ProgramListing>
+
+Here the finalizer <Literal>print (show x)</Literal> contains a reference to <Literal>x</Literal>
+itself, but that does not keep <Literal>x</Literal> alive.  When that is the only
+reference to <Literal>x</Literal>, the finalizer is run; and the message appears
+on the screen.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+A finalizer may even resurrect the object, by (say) storing it in
+some global data structure.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>The general interface</Title>
+
+<Para>
+The <Literal>Weak</Literal> library offers a slight generalisation of 
+the simple weak pointers described so far: 
+
+<ProgramListing>
+mkWeak :: k -&#62; v -&#62; Maybe (IO ()) -&#62; IO (Weak v)
+</ProgramListing>
+
+<Function>mkWeak</Function> takes a key of any type <Literal>k</Literal> and a value of any type
+<Literal>v</Literal>, as well as a finalizer, and returns a weak pointer of type
+<Literal>Weak v</Literal>.  
+</Para>
+
+<Para>
+<Function>deRefWeak</Function> returns the <Emphasis>value</Emphasis> only, not the key, as its 
+type (given above) implies:
+
+<ProgramListing>
+deRefWeak :: Weak a -&#62; IO (Maybe a)
+</ProgramListing>
+
+However, <Function>deRefWeak</Function> returns <Literal>Nothing</Literal> if the <Emphasis>key</Emphasis>, not the
+value, has died.  Furthermore, references from the value to the key
+do not keep the key alive, in the same way that the finalizer does
+not keep the key alive.
+</Para>
+
+<Para>
+Simple weak pointers are readily defined in terms of these more general
+weak pointers:
+
+<ProgramListing>
+mkWeakPtr :: a -&#62; Maybe (IO ()) -&#62; IO (Weak a)
+mkWeakPtr v f = mkWeak v v f
+</ProgramListing>
+
+</Para>
+
+<Para>
+These more general weak pointers are enough to implement memo
+tables properly.
+</Para>
+
+<Para>
+A weak pointer can be finalized early, using the <Function>finalize</Function> operation:
+</Para>
+
+<Para>
+
+<ProgramListing>
+finalize :: Weak v -&#62; IO ()
+</ProgramListing>
+
+</Para>
+
+</Sect2>
+
+<Sect2>
+<Title>A precise semantics</Title>
+
+<Para>
+The above informal specification is fine for simple situations,
+but matters can get complicated.  In particular, it needs to
+be clear exactly when a key dies, so that any weak pointers 
+that refer to it can be finalized.
+Suppose, for example, the value of one weak pointer refers
+to the key of another...does that keep the key alive?
+</Para>
+
+<Para>
+The behaviour is simply this:
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ If a weak pointer (object) refers to an <Emphasis>unreachable</Emphasis>
+key, it may be finalized.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ Finalization means (a) arrange that subsequent calls
+to <Function>deRefWeak</Function> return <Literal>Nothing</Literal>; and (b) run the finalizer.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+This behaviour depends on what it means for a key to be reachable.
+Informally,
+something is reachable if it can be reached by following ordinary
+pointers from the root set, but not following weak pointers.
+We define reachability more precisely as 
+follows
+A heap object is reachable if:
+</Para>
+
+<Para>
+
+<ItemizedList>
+<ListItem>
+
+<Para>
+ It is a member of the <Emphasis>root set</Emphasis>.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ It is directly pointed to by a reachable object, other than
+a weak pointer object.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ It is a weak pointer object whose key is reachable.
+</Para>
+</ListItem>
+<ListItem>
+
+<Para>
+ It is the value or finalizer of an object whose key is
+reachable.
+</Para>
+</ListItem>
+
+</ItemizedList>
+
+</Para>
+
+<Para>
+The root set consists of all runnable threads, and all stable pointers
+(see <XRef LinkEnd="sec-stable-pointers">).
+NOTE: currently all top-level objects are considered to be reachable,
+although we hope to remove this restriction in the future.  A
+<Literal>Char</Literal> or small <Literal>Int</Literal> will also be constantly reachable, since
+the garbage collector replaces heap-resident <Literal>Char</Literal>s and small
+<Literal>Int</Literal>s with pointers to static copies.
+</Para>
+
+<Para>
+Notice that a pointer to the key from its associated 
+value or finalizer does not make the key reachable.
+However, if the key is reachable some other way, then the value
+and the finalizer are reachable, and so, therefore, are any other
+keys they refer to directly or indirectly.
+</Para>
+
+</Sect2>
+
+<Sect2 id="foreign-finalizers">
+<Title>Finalization for foreign objects
+</Title>
+
+<Para>
+A foreign object is some data that lives outside the Haskell heap, for
+example some <Function>malloc</Function>ed data in C land.  It's useful to be able to
+know when the Haskell program no longer needs the <Function>malloc</Function>ed data,
+so it can be <Function>free</Function>d.  We can use weak pointers and finalizers for
+this, but we have to be careful: the foreign data is usually
+referenced by an address, ie. an <Literal>Addr</Literal> (see <XRef LinkEnd="sec-Addr">), and we must retain the invariant that
+<Emphasis>if the Haskell program still needs the foreign object, then it
+retains the <Literal>Addr</Literal> object in the heap</Emphasis>.  This invariant isn't
+guaranteed to hold if we use <Literal>Addr</Literal>, because an <Literal>Addr</Literal> consists
+of a box around a raw address <Literal>Addr&num;</Literal>.  If the Haskell program can
+manipulate the <Literal>Addr&num;</Literal> object independently of the heap-resident
+<Literal>Addr</Literal>, then the foreign object could be inadvertently finalized
+early, because a weak pointer to the <Literal>Addr</Literal> would find no more
+references to its key and trigger the finalizer despite the fact that
+the program still holds the <Literal>Addr&num;</Literal> and intends to use it.
+</Para>
+
+<Para>
+To avoid this somewhat subtle race condition, we use another type of
+foreign address, called <Literal>ForeignObj</Literal> (see <XRef LinkEnd="sec-Foreign">).  Historical note: <Literal>ForeignObj</Literal>
+is identical to the old <Literal>ForeignObj</Literal> except that it no longer
+supports finalization - that's provided by the weak
+pointer/finalization mechanism above.
+</Para>
+
+<Para>
+A <Literal>ForeignObj</Literal> is basically an address, but the <Literal>ForeignObj</Literal>
+itself is a heap-resident object and can therefore be watched by weak
+pointers.  A <Literal>ForeignObj</Literal> can be passed to C functions (in which
+case the C function gets a straightforward pointer), but it cannot be
+decomposed into an <Literal>Addr&num;</Literal>.
+</Para>
+
+</Sect2>
+
+</Sect1>

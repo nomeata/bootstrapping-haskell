@@ -1,0 +1,101 @@
+
+<Sect1 id="sec-Foreign">
+<Title><literal>Foreign</literal><IndexTerm><Primary>Foreign</Primary></IndexTerm>
+</Title>
+
+<Para>
+The Foreign Function Interface (FFI) consists of three parts:
+<OrderedList>
+
+<ListItem>
+<Para>
+foreign import and export declarations (defined in an extra document
+<Emphasis>A Haskell Foreign Function Interface</Emphasis>),
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+a low-level marshalling library (see <XRef LinkEnd="sec-Int">, 
+<XRef LinkEnd="sec-Word">,
+<XRef LinkEnd="sec-Addr">,
+<XRef LinkEnd="sec-ForeignObj">,
+<XRef LinkEnd="sec-stable-pointers">,
+<XRef LinkEnd="sec-Storable">, 
+<XRef LinkEnd="sec-CTypes">, 
+and <XRef LinkEnd="sec-CTypesISO">), and
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+a high-level marshalling library (this is still under development and not
+included in the current distribution).
+</Para>
+</ListItem>
+
+</OrderedList>
+</Para>
+
+<Para>
+The module <Literal>Foreign</Literal> provides the interface to the
+<Emphasis>language independent</Emphasis> portion of the second
+component, i.e., the modules <Literal>Int</Literal> (<XRef
+LinkEnd="sec-Int">), <Literal>Word</Literal> (<XRef LinkEnd="sec-Word">),
+<Literal>Addr</Literal> (<XRef LinkEnd="sec-Addr">),
+<Literal>ForeignObj</Literal> (<XRef LinkEnd="sec-ForeignObj">),
+<Literal>StablePtr</Literal> (<XRef LinkEnd="sec-stable-pointers">), and
+<Literal>Storable</Literal> (<XRef LinkEnd="sec-Storable">).  The two 
+modules <Literal>CTypes</Literal> (<XRef LinkEnd="sec-CTypes">) and
+<Literal>CTypesISO</Literal> (<XRef LinkEnd="sec-CTypesISO">) are 
+specific to code interfacing with C - especially, for implementing
+portable Haskell bindings to C libraries.  However, currently there is no
+dedicated support for languages other than C, so that
+<Literal>Foreign</Literal> will usually be used in conjunction with
+<Literal>CTypes</Literal> and <Literal>CTypesISO</Literal>.
+</Para>
+
+<Para>
+The code for marshalling of Haskell structures into a foreign representation
+and vice versa can generally be implemented in either Haskell or the foreign
+language.  At least if the foreign language is a significantly lower level
+language, such as C, there are good reasons for doing the marshalling in
+Haskell:
+</Para>
+<ItemizedList>
+
+<ListItem>
+<Para>
+Haskell's lazy evaluation strategy would require any foreign code that
+attempts to access Haskell structures to force the evaluation of the
+structures before accessing them.  This would lead to complicated code in the
+foreign language, but does not need any extra consideration when coding the
+marshalling in Haskell.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+Despite the fact that marshalling code in Haskell tends to look like C in
+Haskell syntax, the strong type system still catches many errors that would
+otherwise lead to difficult to debug runtime faults.
+</Para>
+</ListItem>
+
+<ListItem>
+<Para>
+Direct access to Haskell heap structures from a language like C - especially,
+when marshalling from C to Haskell, i.e., when Haskell structures are created
+- carries the risk of corrupting the heap, which usually leads to faults that
+are very hard to debug.  (Paradox as it may seem, the cause for corrupted C
+structures is usually easier to locate, at least when a conventional debugger
+like gdb is at hand.)
+</Para>
+</ListItem>
+
+</ItemizedList>
+<Para>
+Consequently, the Haskell FFI emphasises Haskell-side marshalling.
+</Para>
+
+</Sect1>
