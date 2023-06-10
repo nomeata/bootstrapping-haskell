@@ -21,7 +21,9 @@ module UniqSet (
 
 #include "HsVersions.h"
 
+#if 0
 import {-# SOURCE #-} Name ( Name )
+#endif
 
 import Maybes		( maybeToBool )
 import UniqFM

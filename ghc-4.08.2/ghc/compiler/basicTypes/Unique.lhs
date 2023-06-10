@@ -201,7 +201,9 @@ module Unique (
 import FastString	( FastString, uniqueOfFS )
 import GlaExts
 import ST
+#if 0
 import PrelBase ( Char(..), chr, ord )
+#endif
 
 import Outputable
 \end{code}

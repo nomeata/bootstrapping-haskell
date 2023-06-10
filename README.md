@@ -84,13 +84,16 @@ Summary of some relevant facts:
 
 ## What have we done here
 
-See `./joachims-experiments.sh`
+See `nix develop -c ./joachims-experiments.sh`
 
 Hacks:
 
 * Use `happy`, despite it not being bootstrapped
 
 * Patched hugs to accept # in identifiers
+
+  (Somehow this patch didn’t help in export lists, so a horrible hack in
+  parser.y that needs to be fixed later.)
 
 * Patched `BitSet.lhs` (see vendore directory)
 

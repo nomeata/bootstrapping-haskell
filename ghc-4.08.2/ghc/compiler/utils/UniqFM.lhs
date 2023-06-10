@@ -46,7 +46,9 @@ module UniqFM (
 
 #include "HsVersions.h"
 
+#if 0
 import {-# SOURCE #-} Name	( Name )
+#endif
 
 import Unique		( Uniquable(..), Unique, u2i, mkUniqueGrimily )
 import Panic
