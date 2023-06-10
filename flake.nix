@@ -1,4 +1,5 @@
 {
+  # nixpkgs from Nov 2014
   inputs.nixpkgs-old.url = github:NixOS/nixpkgs/1dfd467c1476d57cf218bad20148d194099c253;
   inputs.nixpkgs-old.flake = false;
 
@@ -14,13 +15,13 @@
         system = system32;
         config.packageOverrides =
           (super: {
-            libmpc = builtins.trace "foo" (super.libmpc.overrideAttrs(old: {
+            mpc = super.mpc.overrideDerivation(old: {
               src =
                 fetchTarball {
                   url = "https://ftp.gnu.org/gnu/mpc/mpc-1.0.1.tar.gz";
-                  sha256 = "";
+                  sha256 = "sha256:1dfjd1ady0rx6wlrncc169ah5nlpmcjx9xvjnddr843zc5bs8b47";
                 };
-            }));
+            });
           })
         ;
       };
