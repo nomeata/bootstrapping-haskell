@@ -1,39 +1,56 @@
 {
   "nodes": {
+    "flake-utils": {
+      "inputs": {
+        "systems": "systems"
+      },
+      "locked": {
+        "lastModified": 1685518550,
+        "narHash": "sha256-o2d0KcvaXzTrPRIo0kOLV0/QXHhDQ5DTi+OxcjO8xqY=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "a1720a10a6cfe8234c0e93907ffe81be440f4cef",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1685356226,
-        "narHash": "sha256-f2clSOdqi0SvY1WSgbnl2YgCZmoCXOxeUjYeXp8p2zI=",
-        "path": "/nix/store/gwswjkpifb65sb88zyysgf6gsp3zx0zy-source",
-        "rev": "0f7f5ca1cdec8dea85bb4fa60378258171d019ad",
-        "type": "path"
+        "lastModified": 1686368671,
+        "narHash": "sha256-/I1IsENqXtqCzmpcd+poC0vu6JZRlzjHMdi3FXYr5qI=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "8f21f3a0a3b65567f21697597d7b061a4731345a",
+        "type": "github"
       },
       "original": {
         "id": "nixpkgs",
         "type": "indirect"
       }
     },
-    "nixpkgs-old": {
-      "flake": false,
+    "root": {
+      "inputs": {
+        "flake-utils": "flake-utils",
+        "nixpkgs": "nixpkgs"
+      }
+    },
+    "systems": {
       "locked": {
-        "lastModified": 1686385795,
-        "narHash": "sha256-+XdZBrGuNKZGhngTCY/pgoeYtwlQ+E5VXqmcFKIJfhI=",
-        "owner": "nomeata",
-        "repo": "nixpkgs",
-        "rev": "a8b46247fa526ba132f6d00e54ac3c5a7b1b5187",
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
         "type": "github"
       },
       "original": {
-        "owner": "nomeata",
-        "ref": "haskell-boostrap",
-        "repo": "nixpkgs",
+        "owner": "nix-systems",
+        "repo": "default",
         "type": "github"
-      }
-    },
-    "root": {
-      "inputs": {
-        "nixpkgs": "nixpkgs",
-        "nixpkgs-old": "nixpkgs-old"
       }
     }
   },
