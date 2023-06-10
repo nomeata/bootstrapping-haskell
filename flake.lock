@@ -2,10 +2,10 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1682134069,
-        "narHash": "sha256-TnI/ZXSmRxQDt2sjRYK/8j8iha4B4zP2cnQCZZ3vp7k=",
-        "path": "/nix/store/96zz1mz8z2m3w8xmcfl6insg1s2cf5dv-source",
-        "rev": "fd901ef4bf93499374c5af385b2943f5801c0833",
+        "lastModified": 1685356226,
+        "narHash": "sha256-f2clSOdqi0SvY1WSgbnl2YgCZmoCXOxeUjYeXp8p2zI=",
+        "path": "/nix/store/gwswjkpifb65sb88zyysgf6gsp3zx0zy-source",
+        "rev": "0f7f5ca1cdec8dea85bb4fa60378258171d019ad",
         "type": "path"
       },
       "original": {
@@ -16,16 +16,16 @@
     "nixpkgs-old": {
       "flake": false,
       "locked": {
-        "lastModified": 1416142348,
-        "narHash": "sha256-DVmxF5iYLAx56g0L8IK6k29337yuE3i1eowdVJTVDD4=",
-        "owner": "NixOS",
+        "lastModified": 1686385263,
+        "narHash": "sha256-n58aUptfzP15xrcrW/n9XjYeqalymenMxPlxvgfnaUM=",
+        "owner": "nomeata",
         "repo": "nixpkgs",
-        "rev": "1dfd467c1476d57cf218bad20148d194099c253f",
+        "rev": "4e6c859e06c1d004a7bf7e33a72b6d395e88920e",
         "type": "github"
       },
       "original": {
-        "owner": "NixOS",
-        "ref": "1dfd467c1476d57cf218bad20148d194099c253",
+        "owner": "nomeata",
+        "ref": "haskell-boostrap",
         "repo": "nixpkgs",
         "type": "github"
       }

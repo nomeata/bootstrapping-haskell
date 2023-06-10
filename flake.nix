@@ -1,6 +1,7 @@
 {
   # nixpkgs from Nov 2014
-  inputs.nixpkgs-old.url = github:NixOS/nixpkgs/1dfd467c1476d57cf218bad20148d194099c253;
+  # with some fixes that I failed to include via overrides
+  inputs.nixpkgs-old.url = github:nomeata/nixpkgs/haskell-boostrap;
   inputs.nixpkgs-old.flake = false;
 
   description = "A very basic flake";
@@ -13,18 +14,6 @@
       pkgs = nixpkgs.legacyPackages.${system};
       pkgs32 = import nixpkgs-old {
         system = system32;
-        config.packageOverrides =
-          (super: {
-            mpc = super.mpc.overrideDerivation(old: {
-              src =
-                super.fetchurl {
-                  url = "https://ftp.gnu.org/gnu/mpc/mpc-1.0.1.tar.gz";
-                  # original:
-                  sha1 = "vxg0rkyn4cs40wr2cp6bbcyr1nnijzlc";
-                };
-            });
-          })
-        ;
       };
 
       nhcsrc = fetchTarball {
