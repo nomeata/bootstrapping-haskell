@@ -1,0 +1,86 @@
+%{
+#include "hspincl.h"
+%}
+%{{
+module U_binding where
+
+#include "HsVersions.h"
+
+import UgenUtil
+
+import U_constr
+import U_list
+import U_maybe
+import U_qid
+import U_ttype
+%}}
+type binding;
+	tbind	: < gtbindc	: list;	 	/* [context entries] */
+		    gtbindid	: ttype; 	/* applied tycon */
+		    gtbindl	: list;  	/* [constr] */
+		    gtbindd	: maybe; 	/* Maybe [deriving] */
+		    gtline	: long;	>;
+	ntbind	: < gntbindc	: list;	 	/* [context entries] */
+		    gntbindid	: ttype; 	/* applied tycon */
+		    gntbindcty	: list;  	/* [constr]  (only 1 constrnew) */ 
+		    gntbindd	: maybe; 	/* Maybe [deriving] */
+		    gntline	: long;	>;
+	nbind	: < gnbindid	: ttype;
+		    gnbindas	: ttype;
+		    gnline	: long; >;
+	pbind	: < gpbindl	: list;
+		    gpline	: long; >;
+	fbind	: < gfbindl	: list;
+		    gfline	: long; >;
+	abind	: < gabindfst	: binding;
+		    gabindsnd	: binding; >;
+	ibind	: < gibindi	: ttype;
+		    gibindw	: binding;
+		    giline	: long;	>;
+	dbind	: < gdbindts	: list;
+		    gdline	: long; >;
+	cbind	: < gcbindc	: list;
+		    gcbindid	: ttype;
+		    gcbindw	: binding;
+		    gcline	: long;	>;
+	sbind	: < gsbindids	: list;
+		    gsbindid	: ttype;
+		    gsline	: long;	>;
+
+	nullbind : < >;
+
+	import	: < gibindimod	 : stringId;
+		    gibindqual	 : long;
+		    gibindas	 : maybe;
+		    gibindspec	 : maybe;
+		    gibindsource : long;
+		    gibindline	 : long; >;
+
+	/* user-specified pragmas:XXXX */
+
+	vspec_uprag : <	gvspec_id   : qid;
+			gvspec_tys  : list;
+			gvspec_line : long; >;
+
+	vspec_ty_and_id : < gvspec_ty : ttype;
+			gvspec_tyid : maybe; /* nil or singleton */ >;
+
+	ispec_uprag : <	gispec_clas : qid;
+			gispec_ty   : ttype;
+			gispec_line : long; >;
+
+	inline_uprag: <	ginline_id   : qid;
+			ginline_line : long; >;
+
+	noinline_uprag: < gnoinline_id   : qid;
+			  gnoinline_line : long; >;
+
+	magicuf_uprag:< gmagicuf_id   : qid;
+			gmagicuf_str  : stringId;
+			gmagicuf_line : long; >;
+
+	dspec_uprag : <	gdspec_id   : qid;
+			gdspec_tys  : list;
+			gdspec_line : long; >;
+
+end;

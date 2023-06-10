@@ -1,0 +1,5 @@
+These libraries used to be distributed along with the GHC sources, in
+the 'hslibs' directory.
+
+	hbc     --  some non-standard libraries that come with hbc
+	contrib --  some (mainly numeric) contributed library code

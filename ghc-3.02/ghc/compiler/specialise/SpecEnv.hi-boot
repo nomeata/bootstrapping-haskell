@@ -1,0 +1,5 @@
+_interface_ SpecEnv 1
+_exports_
+SpecEnv SpecEnv ;
+_declarations_
+1 data SpecEnv a ;

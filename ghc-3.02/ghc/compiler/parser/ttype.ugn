@@ -1,0 +1,27 @@
+%{
+#include "hspincl.h"
+%}
+%{{
+module U_ttype where
+
+#include "HsVersions.h"
+
+import UgenUtil
+
+import U_list
+import U_qid
+%}}
+type ttype;
+	tname	: < gtypeid	: qid; 	>;
+	namedtvar : < gnamedtvar : qid;	>;
+	tllist	: < gtlist	: ttype; >;
+	ttuple	: < gttuple	: list; >;
+	tfun	: < gtin	: ttype;
+		    gtout	: ttype; >;
+	tapp	: < gtapp	: ttype;
+		    gtarg	: ttype; >;
+	tbang	: < gtbang	: ttype; >;
+	context	: < gtcontextl	: list;
+		    gtcontextt	: ttype; >;
+end;
+

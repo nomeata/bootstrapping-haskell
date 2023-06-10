@@ -1,0 +1,97 @@
+This is the INSTALL instructions for a binary bundle of the
+Glorious Glasgow Haskell Compilation System. For more details
+on what on earth this package is up to, please consult the README
+and ANNOUNCE.
+
+To start using the bundle, you can either:
+
+* use it in-place, i.e., don't go ahead with a
+  full install, but just set it up to use the unpacked
+  distribution in-situ.
+
+* get it over with, and do the full install (details of how are ahead).
+
+NOTE Win32 users: see comment below before continuing.
+
+To set the ball rolling, run the configure script (as usual, run
+the script with --help to see what options it supports).
+
+This will figure out what platform you're running on, and a couple of other
+interesting pieces of trivia, which it will then fill in the Makefile.in
+template to give you a real Makefile. 
+
+[Win32 users: don't be alarmed if you should encounter the following
+ message from the configure script:
+  
+      not updating unwritable cache ./config.cache
+
+This is a known problem of generated autoconf configure scripts running
+on cygwin32, but harmless (it only means you get to re-do all the configure
+tests should you decide to re-run the script.)
+]
+
+Have a look at the Makefile to see if you agree with the information
+therein. If you want to use the bundle in-place, now run `make in-place'.
+If you're installing, `make install' (`make show-install-setup' prints
+the details of where the different pieces of the bundle are heading when
+-- possibly helpful).
+
+For more information, please consult the installation guide in
+{html,dvi,info}/ghc-2.10/installing{.dvi,.info,_toc.html}.
+
+Bug reports/suggestions for improvement to the installation procedure/setup
+(as well as other GHC related troubles you're experiencing, of course),
+gratefully received at glasgow-haskell-bugs@dcs.gla.ac.uk
+
+Enjoy.
+
+
+-------Win32 users only----------------------------------------
+NOTE to Win32 users: to enjoy any sort of happiness with the GHC
+tools, you will have to install the cygwin32 toolchain, which dresses
+up the Win32 environment into something more UNIX-like (which
+this initial port of ghc relies on being the case). The cygwin32 tools
+are available from
+
+    ftp://ftp.cygnus.com/pub/gnu-win32/latest/
+       (Cygnus Solutions; Mt. View, CA.)
+    ftp://sunsite.doc.ic.ac.uk/pub/gnu/cygnus/gnu-win32/
+        (Sunsite Northern Europe; Imperial College, London)
+    ftp://ftp.crl.go.jp/pub/GNU/cygnus/gnu-win32/
+	(CRL, Ministry of Posts and Telecom., Japan)
+
+GHC was built with beta18 of the cygwin32 tools and depends on
+it to work.
+
+The GHC tools are also quite picky about Perl, the commonly-used
+Hip/ActiveWare Win32 port of perl5 just ain't Cool Enough (main reason: 
+GHC scripts assume they are talking to an underlying UNIX command
+shell). A basic port of perl5.004 done on top of cygwin32-b18 is
+is available from 
+
+   ftp://ftp.dcs.gla.ac.uk/pub/haskell/glasgow/working/perl5-004pl1.zip
+
+this port is by no means complete, but is sufficient for our needs.
+(more complete perl5 cygwin32 binary bundles are available
+ elsewhere - search the web if you need it.)
+
+Install both cygwin32&perl5 before continuing. Couple of things
+to remember doing while installing these two:
+
+  - Create a toplevel /bin directory, and copy bash.exe into it
+    as sh.exe (we'll need this for running the configure script.)
+    Add /bin to your PATH.
+  - Create a toplevel /tmp directory.
+  - If you don't have a good reason not to, it is also recommended
+    that you also put the perl binary inside /bin as well. Don't
+    put it inside the bin/ directory inside the installed cygwin32
+    tree, as this is likely to cause #! not to work on perl scripts
+    (path is likely to exceed 32 chars.)
+
+NOTE: If you're planning to install ghc on a drive different from
+where you're going to compile programs, you either need to
+change the TMPDIR variable in the Makefile to "." or the
+environment variable TMPDIR to "." when running ghc. This is clearly
+not desirable, but the only solution known to work under beta18.
+
+-------Win32 users only----------------------------------------

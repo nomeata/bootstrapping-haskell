@@ -1,0 +1,3178 @@
+%
+% (c) The GRASP/AQUA Project, Glasgow University, 1992-1997
+%
+
+This is the driver script for the Glasgow Haskell compilation system.
+It is written in \tr{perl}.  The first section includes a long
+``usage'' message that describes how the driver is supposed to work.
+
+%************************************************************************
+%*									*
+\section[Driver-usage]{Usage message}
+%*									*
+%************************************************************************
+
+\begin{code}
+($Pgm = $0) =~ s|.*/||;
+$ShortUsage  =  "\nUsage: For basic information, try the `-help' option.\n";
+$LongUsage = "\n" . <<EOUSAGE;
+Use of the Glorious Haskell Compilation System driver:
+
+    $Pgm [command-line-options-and-input-files]
+
+------------------------------------------------------------------------
+This driver ($Pgm) guides each input file through (some of the)
+possible phases of a compilation:
+
+    - unlit:	extract code from a "literate program"
+    - hscpp:	run code through the C pre-processor (if -cpp flag given)
+    - hsc:	run the Haskell compiler proper
+    - gcc:	run the C compiler (if compiling via C)
+    - as:	run the assembler
+    - ld:	run the linker
+
+For each input file, the phase to START with is determined by the
+file's suffix:
+    - .lhs	literate Haskell: unlit
+    - .hs	illiterate Haskell: hsc
+    - .hc	C from the Haskell compiler: gcc
+    - .c	C not from the Haskell compiler: gcc
+    - .s	assembly language: as
+    - other	passed directly to the linker: ld
+
+If no files are given on the command line, input is taken from
+standard input, and processing is as for an .hs file.  (All output is
+to stdout or stderr, however).
+
+The phase at which to STOP processing is determined by a command-line
+option:
+    -E		stop after generating preprocessed, de-litted Haskell (used in conjunction with -cpp)
+    -C		stop after generating C (.hc output)
+    -S		stop after generating assembler (.s output)
+    -c		stop after generating object files (.o output)
+
+Other commonly-used options are:
+
+    -O		An `optimising' package of compiler flags, for faster code
+
+    -prof	Compile for cost-centre profiling
+		(add -auto for automagic cost-centres on top-level functions)
+
+    -fglasgow-exts  Allow Glasgow extensions (unboxed types, etc.)
+
+    -H14m	Increase compiler's heap size
+
+    -M          Output the Makefile rules recording the
+                dependencies of a list of Haskell files.
+	        (ghc driver script calls upon the help of a
+                 compatible mkdependHS script to do the actual
+		 processing)
+
+The User's Guide has more information about GHC's *many* options.
+
+Given the above, here are some TYPICAL invocations of $Pgm:
+
+    # compile a Haskell module to a .o file, optimising:
+    % $Pgm -c -O Foo.hs
+    # link three .o files into an executable called "test":
+    % $Pgm -o test Foo.o Bar.o Baz.o
+    # compile a Haskell module to C (a .hc file), using a bigger heap:
+    % $Pgm -C -H16m Foo.hs
+    # compile Haskell-produced C (.hc) to assembly language:
+    % $Pgm -S Foo.hc
+------------------------------------------------------------------------
+EOUSAGE
+\end{code}
+
+%************************************************************************
+%*									*
+\section[Driver-init]{Initialisation}
+%*									*
+%************************************************************************
+
+The driver script need to be told where to find these executables, so
+in the course of building the driver `executable', make-variables holding
+these are prepended to the de-litted version of this file. The variables are:
+
+\begin{verbatim}
+INSTALLING
+
+HOSTPLATFORM TARGETPLATFORM
+
+ProjectName ProjectVersion ProjectVersionInt ProjectPatchLevel 
+
+TOP_PWD
+
+bindir libdir libexecdir datadir
+
+CURRENT_DIR TMPDIR
+
+GHC_LIB_DIR GHC_RUNTIME_DIR GHC_UTILS_DIR GHC_INCLUDE_DIR
+
+GHC_OPT_HILEV_ASM GhcWithNativeCodeGen
+
+GHC_UNLIT GHC_HSCPP GHC_HSC GHC_SYSMAN
+
+CP RM CONTEXT_DIFF
+
+WAY_*_NAME WAY_*_HC_OPTS
+
+LeadingUnderscore
+
+\end{verbatim}
+
+Establish what executables to run for the various phases, what the
+default options are for those phases, and other similar boring stuff.
+
+\begin{code}
+select(STDERR); $| = 1; select(STDOUT); # no STDERR buffering, please.
+
+$TargetPlatform = $TARGETPLATFORM;
+
+$TopPwd	           = "${TOP_PWD}";
+$InstBinDirGhc     = "${bindir}";
+$InstLibDirGhc     = "${libdir}";
+#
+# Normally the same as InstLibDirGhc, but we accommodate
+# for it being separate.
+#
+$InstLibExecDirGhc = "${libexecdir}";
+$InstDataDirGhc    = "${datadir}";
+
+$Status  = 0; # just used for exit() status
+$Verbose = '';
+
+# set up signal handler
+sub quit_upon_signal { &tidy_up_and_die(1, ''); }
+$SIG{'INT'}  = 'quit_upon_signal';
+$SIG{'QUIT'} = 'quit_upon_signal';
+
+# where to get "require"d .prl files at runtime (poor man's dynamic loading)
+#   (use LIB, not DATA, because we can't be sure of arch-independence)
+@INC = ( ( $INSTALLING ) ? $InstLibDirGhc
+			   : "$TopPwd/${CURRENT_DIR}" );
+
+if ( $ENV{'TMPDIR'} ) { # where to make tmp file names
+    $Tmp_prefix = ($ENV{'TMPDIR'} . "/ghc$$");
+} else {
+    print STDERR "TMPDIR has not been set to anything useful!\n" if (${TMPDIR} eq '');
+    $Tmp_prefix ="${TMPDIR}/ghc$$"; # TMPDIR set via Makefile when booting..
+    $ENV{'TMPDIR'} = ${TMPDIR}; # set the env var as well
+}
+
+# Some shells run into real trouble when command line and environment
+# gets big (e.g., cmd lines of >4K to /bin/sh causes havoc on our 
+# Solaris-2.5.1 boxes - even though sysconf(_SC_ARG_MAX) reports 1M ...).
+# To work around any such */bin/sh* problems, we will scribble such
+# awfully long command lines into a temp file and exec that temp file
+# with $(REAL_SHELL) (don't use the SHELL variable directly as this
+# will normally get you the wrong thing when the driver is invoked
+# from within `make'). If the REAL_SHELL variable isn't set, you'll
+# get SHELL. This is all a terrible hack. (in case you hadn't reached
+# the same conclusion by now :-)
+#
+# TBC..
+#
+if ( ! $ENV{'REAL_SHELL'} ) {
+    $ENV{'REAL_SHELL'} = $ENV{'SHELL'};
+}
+
+@Files_to_tidy = (); # files we nuke in the case of abnormal termination
+
+$Unlit = ( $INSTALLING ) ? "$InstLibExecDirGhc/unlit"
+			 : "$TopPwd/${CURRENT_DIR}/${GHC_UNLIT}";
+
+$Cp   = $CP;
+$Rm   = $RM;
+$Diff = $CONTEXT_DIFF;
+$Cat  = 'cat';
+$Cmp  = 'cmp';
+$Time = '';
+
+$HsCpp	 = # but this is re-set to "cat" (after options) if -cpp not seen
+	   ( $INSTALLING ) ? "$InstLibExecDirGhc/hscpp"
+			   : "$TopPwd/${CURRENT_DIR}/${GHC_HSCPP}";
+
+@HsCpp_flags	= ();
+$HsC	 = ( $INSTALLING ) ? "$InstLibExecDirGhc/hsc"
+			   : "$TopPwd/${CURRENT_DIR}/${GHC_HSC}";
+
+# For PVM fiends only
+$SysMan	 = ( $INSTALLING ) ? "$InstLibExecDirGhc/SysMan"
+			   : "$TopPwd/${CURRENT_DIR}/${GHC_SYSMAN}";
+
+@Unlit_flags	= ();
+
+#
+# HsC_rts_flags: if we want to talk to the LML runtime system
+# NB: we don't use powers-of-2 sizes, because this may do
+#   terrible things to cache behavior.
+#
+$Specific_heap_size = 6 * 1000 * 1000;
+$Specific_stk_size  = 1000 * 1000;
+$Scale_sizes_by     = 1.0;
+
+\end{code}
+
+The variables set by @setupOptFlags@ represent parts of the
+-O/-O2/etc ``templates,'' which are filled in later, using these.
+These are the default values, which may be changed by user flags.
+
+\begin{code}
+sub setupOptFlags {
+   $Oopt_MaxSimplifierIterations  = '-fmax-simplifier-iterations4';
+   $Oopt_PedanticBottoms	  = '-fpedantic-bottoms'; # ON by default
+   $Oopt_MonadEtaExpansion	  = '';
+   $Oopt_FinalStgProfilingMassage = '';
+   $Oopt_StgStats		  = '';
+   $Oopt_SpecialiseUnboxed	  = '';
+   $Oopt_DoSpecialise		  = '-fspecialise';
+   $Oopt_FoldrBuild		  = 0; # *Off* by default!
+   $Oopt_FB_Support		  = ''; # was '-fdo-arity-expand';
+#  $Oopt_FoldrBuildWW		  = 0; # Off by default
+   $Oopt_FoldrBuildInline	  = ''; # was '-fdo-inline-foldr-build';
+   $Oopt_ShowSimplifierProgress   = '';
+} # end of setupOptFlags
+
+# Assign defaults to these right away.
+&setupOptFlags();
+\end{code}
+
+Things to do with C compilers/etc:
+\begin{code}
+$CcRegd	 	= $GHC_OPT_HILEV_ASM;
+@CcBoth_flags	= ('-S');   # flags for *any* C compilation
+@CcInjects	= ();
+
+# GCC flags: 
+#    those for all files, 
+#    those only for .c files;
+#    those only for .hc files
+
+@CcRegd_flags    = ('-ansi', '-D__STG_GCC_REGS__', '-D__STG_TAILJUMPS__');
+@CcRegd_flags_c	= ();
+@CcRegd_flags_hc = ();
+
+$As	 	= ''; # "assembler" is normally GCC
+@As_flags	= ();
+
+$Lnkr	 	= ''; # "linker" is normally GCC
+@Ld_flags	= ();
+
+# 'nm' is used for consistency checking (ToDo: mk-world-ify)
+# ToDo: check the OS or something ("alpha" is surely not the crucial question)
+$Nm = ($TargetPlatform =~ /^alpha-/) ? 'nm -B' : 'nm';
+\end{code}
+
+Warning packages that are controlled by -W and -Wall.  The 'standard'
+warnings that you get all the time are
+	
+	-fwarn-overlapping-patterns
+	-fwarn-missing-methods
+	-fwarn-duplicate-exports
+
+these are turned off by -Wnot.
+
+\begin{code}
+@StandardWarnings = ('-fwarn-overlapping-patterns', 
+		     '-fwarn-missing-methods',
+		     '-fwarn-duplicate-exports');
+@MinusWOpts    	  = (@StandardWarnings, 
+		     '-fwarn-incomplete-patterns', 
+		     '-fwarn-unused-binds',
+		     '-fwarn-unused-imports');
+@MinusWallOpts 	  = (@MinusWOpts, 
+		     '-fwarn-unused-matches',
+		     '-fwarn-name-shadowing');
+\end{code}
+
+What options \tr{-user-setup-a} turn into (user-defined ``packages''
+
+of options).  Note that a particular user-setup implies a particular
+Prelude ({\em including} its interface file(s)).
+\begin{code}
+$BuildTag	= ''; # default is sequential build w/ Appel-style GC
+
+%BuildDescr	= (# system ways begin
+                   '',	    'normal sequential',
+		   '_p',    "$WAY_p_NAME",
+		   '_t',    "$WAY_t_NAME",
+		   '_u',    "$WAY_u_NAME",
+		   '_mc',   "$WAY_mc_NAME",
+		   '_mr',   "$WAY_mr_NAME",
+		   '_mt',   "$WAY_mt_NAME",
+		   '_mp',   "$WAY_mp_NAME",
+		   '_mg',   "$WAY_mg_NAME",
+		   '_2s',   "$WAY_2s_NAME",
+		   '_1s',   "$WAY_1s_NAME",
+		   '_du',   "$WAY_du_NAME",
+		   # system ways end
+		   '_a',    "$WAY_a_NAME",
+		   '_b',    "$WAY_b_NAME",
+		   '_c',    "$WAY_c_NAME",
+		   '_d',    "$WAY_d_NAME",
+		   '_e',    "$WAY_e_NAME",
+		   '_f',    "$WAY_f_NAME",
+		   '_g',    "$WAY_g_NAME",
+		   '_h',    "$WAY_h_NAME",
+		   '_i',    "$WAY_i_NAME",
+		   '_j',    "$WAY_j_NAME",
+		   '_k',    "$WAY_k_NAME",
+		   '_l',    "$WAY_l_NAME",
+		   '_m',    "$WAY_m_NAME",
+		   '_n',    "$WAY_n_NAME",
+		   '_o',    "$WAY_o_NAME",
+		   '_A',    "$WAY_A_NAME",
+		   '_B',    "$WAY_B_NAME" );
+
+# these are options that are "fed back" through the option processing loop
+#
+%SetupOpts = 
+       (
+	'_a', "$WAY_a_HC_OPTS",
+	'_b', "$WAY_b_HC_OPTS",
+	'_c', "$WAY_c_HC_OPTS",
+	'_d', "$WAY_d_HC_OPTS",
+	'_e', "$WAY_e_HC_OPTS",
+	'_f', "$WAY_f_HC_OPTS",
+	'_g', "$WAY_g_HC_OPTS",
+	'_h', "$WAY_h_HC_OPTS",
+	'_i', "$WAY_i_HC_OPTS",
+	'_j', "$WAY_j_HC_OPTS",
+	'_k', "$WAY_k_HC_OPTS",
+	'_l', "$WAY_l_HC_OPTS",
+	'_m', "$WAY_m_HC_OPTS",
+	'_n', "$WAY_n_HC_OPTS",
+	'_o', "$WAY_o_HC_OPTS",
+	'_A', "$WAY_A_HC_OPTS",
+	'_B', "$WAY_B_HC_OPTS",
+
+	# system ways
+	'_p',  "$WAY_p_HC_OPTS",
+	'_t',  "$WAY_t_HC_OPTS",
+	'_u',  "$WAY_u_HC_OPTS",
+	'_mc', "$WAY_mc_HC_OPTS",
+	'_mr', "$WAY_mr_HC_OPTS",
+	'_mt', "$WAY_mt_HC_OPTS",
+	'_mp', "$WAY_mp_HC_OPTS",
+	'_mg', "$WAY_mg_HC_OPTS",
+	'_2s', "$WAY_2s_HC_OPTS",
+	'_1s', "$WAY_1s_HC_OPTS",
+	'_du', "$WAY_B_HC_OPTS" );
+
+\end{code}
+
+Import/include directories (\tr{-I} options) are sufficiently weird to
+require special handling.
+
+\begin{code}
+@Import_dir	= ('.'); #-i things
+@Include_dir	= ('.'); #-I things; other default(s) stuck on AFTER option processing
+
+# where to look for interface files (system hi's, i.e., prelude and syslibs)
+@SysImport_dir	= ( $INSTALLING )
+		    ? ( "$InstLibDirGhc/imports/std" )
+		    : ( "$TopPwd/$CURRENT_DIR/$GHC_LIB_DIR/std" );
+
+# We need to look in ghc/ and glaExts/ when searching for implicitly needed .hi files, but 
+# we should really *not* look there for explicitly imported modules.
+
+$GhcVersionInfo  = $ProjectVersionInt;
+$Haskell1Version = 4; # i.e., Haskell 1.4
+@Cpp_define	 = ();
+
+@UserLibrary_dir= ();	#-L things;...
+@UserLibrary   	= ();	#-l things asked for by the user
+
+@SysLibrary_dir = ( ( $INSTALLING )	#-syslib things supplied by the system
+		    ? $InstLibDirGhc
+		    : ( "$TopPwd/$CURRENT_DIR/$GHC_RUNTIME_DIR"
+		      , "$TopPwd/$CURRENT_DIR/$GHC_RUNTIME_DIR/gmp"
+		      , "$TopPwd/$CURRENT_DIR/$GHC_LIB_DIR/std"
+		      , "$TopPwd/$CURRENT_DIR/$GHC_LIB_DIR/std/cbits"
+		      )
+		  );
+@SysLibrary = (); # will be built up as we go along
+
+$TopClosureFile # defaults to 1.2 one; will be mangled later
+	= ( $INSTALLING)  ? "$InstLibDirGhc/TopClosureXXXX.o"
+			  : "$TopPwd/$CURRENT_DIR/$GHC_RUNTIME_DIR/main/TopClosureXXXX.o";
+
+# make depend for Haskell
+$MkDependHS
+	= ( $INSTALLING ) ? "$InstBinDirGhc/mkdependHS"
+			  : "$TopPwd/$CURRENT_DIR/$GHC_UTILS_DIR/mkdependHS/mkdependHS";
+# Fill in later
+@MkDependHS_flags = ();
+
+# do_link flag should not be reset while rescanning the cmd-line.
+$Do_lnkr    = 1;
+$Specific_output_dir = '';  	# set by -odir <dir>
+$Specific_output_file = '';	# set by -o <file>; "-" for stdout
+\end{code}
+
+Function to initialise the per-compilation-unit globals that
+are used to guide and control the invocation of the different phases.
+
+\begin{code} 
+sub initDriverGlobals {
+
+# reset the following options:
+# RTS flags to use while compiling
+@HsC_rts_flags      = ();
+@HsP_flags	= (); # these are the flags destined solely for
+		      # the flex/yacc parser
+@HsC_flags	= ();
+@HsC_antiflags  = ();
+\end{code}
+
+The optimisations/etc to be done by the compiler are {\em normally}
+expressed with a \tr{-O} (or \tr{-O2}) flag, or by its absence.
+
+\begin{code}
+$OptLevel      = 0; # no -O == 0; -O == 1; -O2 == 2; -Ofile == 3
+$MinusO2ForC   = 0; # set to 1 if -O2 should be given to C compiler
+$StolenX86Regs = 4; # **HACK*** of the very worst sort
+$CoreLint      = '';
+$StgLint       = '';
+
+@CcBoth_flags	= ('-S');   # flags for *any* C compilation
+@CcInjects	= ();
+
+# GCC flags: those for all files, those only for .c files; those only for .hc files
+@CcRegd_flags    = ('-ansi', '-D__STG_GCC_REGS__', '-D__STG_TAILJUMPS__');
+@CcRegd_flags_c	= ();
+@CcRegd_flags_hc = ();
+
+@Import_dir	= ('.'); #-i things
+@Include_dir	= ('.'); #-I things; other default(s) stuck on AFTER option processing
+
+
+\end{code}
+
+We are given a list of files with various presumably-known suffixes
+(unknown-suffix files go straight to the linker).  For each file, we
+begin by assuming that we'll run every phase over it.  However: (1)
+global flags (\tr{-c}, \tr{-S}, etc.) tell us not to run any phase
+past a certain point; and (2) the file's suffix tells us what phase to
+start with.  Linking is weird and kept track of separately.
+
+Here are the initial defaults applied to all files:
+\begin{code}
+$Cpp_flag_set = 0;	  # (hack)
+$Only_preprocess_C = 0;	  # pretty hackish
+$Only_preprocess_hc = 0;  # ditto
+$Only_generate_deps = 0;  # "
+$PostprocessCcOutput = 0;
+
+# native code-gen or via C?
+$HaveNativeCodeGen = $GhcWithNativeCodeGen;
+$HscOut = '-C='; # '-C=' ==> .hc output; '-S=' ==> .s output; '-N=' ==> neither
+$HscOut = '-S='
+    if $HaveNativeCodeGen && $TargetPlatform =~ /^(alpha|sparc)-/;
+# TEMP: disable x86  if $HaveNativeCodeGen && $TargetPlatform =~ /^(i386|alpha|sparc)-/;
+$ProduceHi    = '-hifile=';
+$HiOnStdout   = 0;
+$HiWith       = '';
+$HiDiff_flag  = '';
+$Keep_HiDiffs = 0;
+
+$CollectingGCstats = 0;
+$CollectGhcTimings = 0;
+$DEBUGging = '';	# -DDEBUG and all that it entails (um... not really)
+$PROFing = '';		# set to p or e if profiling
+$PROFgroup = '';	# set to group if an explicit -Ggroup specified
+$PROFauto = '';	        # set to relevant hsc flag if -auto or -auto-all
+$PROFcaf  = '';	        # set to relevant hsc flag if -caf-all
+$PROFignore_scc = '';	# set to relevant parser flag if explicit sccs ignored
+$UNPROFscc_auto = '';	# set to relevant hsc flag if forcing auto sccs without profiling
+$TICKYing = '';    	# set to t if compiling for ticky-ticky profiling
+$PARing = '';		# set to p if compiling for PAR
+$CONCURing = '';    	# set to c if compiling for CONCURRENT
+$GRANing = '';		# set to g if compiling for GRAN
+$StkChkByPageFaultOK = 1; # may be set to 0 (false) for some builds
+$Specific_hi_file = '';		# set by -ohi <file>; "-" for stdout
+$Specific_dump_file = '';	# set by -odump <file>; "-" for stdout
+$Using_dump_file = 0;
+$Isuffix    = '';
+$Osuffix    = '';	# default: use the normal suffix for that kind of output
+$HiSuffix   = 'hi';
+$HiSuffix_prelude = '';
+$Do_recomp_chkr = 0;	# don't use the recompilatio checker unless asked
+$Do_cc	    = -1;   # a MAGIC indeterminate value; will be set to 1 or 0.
+$Do_as	    = 1;
+
+$Keep_hc_file_too = 0;
+$Keep_s_file_too = 0;
+$UseGhcInternals = 0; # if 1, may use GHC* modules
+$SplitObjFiles = 0;
+$NoOfSplitFiles = 0;
+$Dump_parser_output = 0;
+$Dump_raw_asm = 0;
+$Dump_asm_splitting_info = 0;
+$NoImplicitPrelude = 0;
+
+
+} # end of initDriverGlobals (Sigh)
+
+# we split the argv passed to the driver into three:
+
+# the list of files
+@Input_file = ();
+
+# and files to be linked...
+@Link_file  = ();
+
+# and whatever else
+@Cmd_opts  = ();
+
+# cmd line options prefixing the unit we're compiling
+@File_options = ();
+
+\end{code}
+
+We inject consistency-checking information into \tr{.hc} files (both
+when created by the Haskell compiler and when compiled by the C
+compiler), so that we can check that an executable is made from
+consistently-built pieces.  (The check is normally done just after
+linking.)  The checking is done by introducing/munging
+\tr{what(1)}-style strings.  Anyway, here are the relevant global
+variables and their defaults:
+\begin{code}
+$LinkChk = 1;	# set to 0 if the link check should *not* be done
+
+# major & minor version numbers; major numbers must always agree;
+# minor disagreements yield a warning.
+$HsC_major_version = 33;
+$HsC_minor_version = 0;
+$Cc_major_version  = 36;
+$Cc_minor_version  = 1;
+
+# options: these must always agree
+$HsC_consist_options = '';    # we record, in this order:
+			      #	    Build tag; debugging?
+$Cc_consist_options  = '';    # we record, in this order:
+			      #	    Build tag; debugging?
+\end{code}
+
+%************************************************************************
+%*									*
+\section[Driver-parse-argv]{Munge the command-line options}
+%*									*
+%************************************************************************
+
+Now slurp through the arguments.
+\begin{code}
+
+&initDriverGlobals();
+&splitCmdLine(@ARGV);
+# Run through the cmd-line first time.
+&processArgs(@Cmd_opts);
+
+# Check to see if driver is only in the business
+# to generate dependencies
+if (  $Status == 0 && $Only_generate_deps ) {
+
+    push (@MkDependHS_flags, "-o$Osuffix") if $Osuffix;
+    push (@MkDependHS_flags, "-s$BuildTag") if $BuildTag;
+    push (@MkDependHS_flags, "-D__HASKELL1__=$Haskell1Version");
+    # They're not (currently) needed, but we need to quote any -#include options
+    foreach (@Cmd_opts) {
+    	s/-#include.*$/'$&'/g;
+    };
+    local($to_do) = "$MkDependHS @MkDependHS_flags -- @Cmd_opts -- @Input_file" ;
+    &run_something($to_do, 'Haskell dependencies');
+    exit $Status;
+}
+
+# if there are several input files,
+# we don't allow \tr{-o <file>} or \tr{-ohi <file>} options...
+# (except if linking, of course)
+
+if ($#Input_file > 0 && ( ! $Do_lnkr )) {
+    if ( ($Specific_output_file ne '' && $Specific_output_file ne '-')
+      || ($Specific_hi_file ne ''     && $Specific_hi_file ne '-') ) {
+	print STDERR "$Pgm: You can't use -o or -ohi options if you have multiple input files.\n";
+	print STDERR "\tPerhaps the -odir option will do what you want.\n";
+	$Status++;
+    }
+}
+
+# check for various pathological -o and -odir combinations...
+if ($Specific_output_dir ne '' && $Specific_output_file ne '') {
+    if ($Specific_output_file eq '-') {
+	print STDERR "$Pgm: can't set output directory with -ohi AND have output to stdout\n";
+	$Status++;
+    } else { # amalgamate...
+    	$Specific_output_file = "$Specific_output_dir/$Specific_output_file";
+	# ToDo: check we haven't got a junk name now...
+	$Specific_output_dir  = ''; # reset
+    }
+}
+
+# crash and burn if there were errors
+if ( $Status > 0 ) {
+    print STDERR $ShortUsage;
+    exit $Status;
+}
+\end{code}
+
+%************************************************************************
+%*									*
+\section[Driver-post-argv-mangling]{Setup after reading options}
+%*									*
+%************************************************************************
+
+%************************************************************************
+%*									*
+\subsection{Set up for optimisation level (\tr{-O} or whatever)}
+%*									*
+%************************************************************************
+
+We come now to the default ``wads of options'' that are turned on by
+\tr{-O0} (do min optimisation), \tr{-O} (ordinary optimisation),
+\tr{-O2} (aggressive optimisation), or no O-ish flag (compile speed is
+more important).
+
+The user can also specify his/her own list of options in a file; in
+that case, the work is already done (see stuff about @minusO3@,
+earlier...).
+
+GHC allows very precise control of what happens during a compilation.
+Core-to-Core and STG-to-STG passes can be run in any order, as many
+times as you like.  Individual transformations can be turned on or
+disabled.
+
+Sadly, however, there are some interdependencies \& Things You Must
+Not Do.  Here is the list.
+
+CORE-TO-CORE PASSES:
+\begin{description}
+\item[\tr{-fspecialise}:]
+The specialiser must have dependency-analysed input; but if you run
+the simplifier to do this, you must not let it toss away unused
+bindings!  (The typechecker conveys some specialisation info via
+``unused'' bindings...)
+
+\item[\tr{-ffloat-inwards}:]
+Floating inwards should be done before strictness analysis, because
+the latter will give better results.
+
+\item[\tr{-fstatic-args}:]
+The static-arguments-transformation pass {\em must} have the
+simplifier run right after it.
+
+\item[\tr{-fcalc-inlinings[12]}:]
+Not required, but there may be slight gains by re-simplifying after
+this is done.  (You could then \tr{-fcalc-inlinings} again, just for
+fun.)
+
+\item[\tr{-ffull-laziness}:]
+The (outwards-)let-floater should be the {\em last} Core-to-Core pass
+that's run.  (Um, well, howzabout the simplifier just once more...)
+\end{description}
+
+STG-TO-STG PASSES:
+\begin{description}
+\item[\tr{-fupdate-analysis}:]
+It really really wants to be the last STG-to-STG pass that is run.
+\end{description}
+
+\begin{code}
+
+sub setupOptimiseFlags {
+
+   @HsC_minusNoO_flags 
+    = (	'-fsimplify',
+	  '[',
+	  $Oopt_FB_Support,
+	  '-ffloat-lets-exposing-whnf',
+	  '-ffloat-primops-ok',
+	  '-fcase-of-case',
+	  '-fdo-case-elim',
+#	  '-fdo-lambda-eta-expansion',	# too complicated
+	  '-freuse-con',
+#	  '-flet-to-case',		# no strictness analysis, so...
+	  $Oopt_PedanticBottoms,
+#	  $Oopt_MonadEtaExpansion,	# no thanks
+
+# These two work fine, if you really want no simplification at all,
+# for bizarre test reasons.  But you get really terrible code if you use them,
+#	for example: let x = e in x
+# with dozens of redundant thunks etc.  So I'm leaving them out.
+#
+#	  '-fsimpl-uf-use-threshold0',
+#	  '-fessential-unfoldings-only',
+
+	  $Oopt_MaxSimplifierIterations,
+	  $Oopt_ShowSimplifierProgress,
+	  ']',
+	$Oopt_AddAutoSccs,
+#	'-ffull-laziness',	# removed 95/04 WDP following Andr\'e's lead
+	
+	$Oopt_FinalStgProfilingMassage
+      );
+
+   @HsC_minusO_flags # NOTE: used for *both* -O and -O2 (some conditional bits)
+    = (
+        '-fdo-eta-reduction',
+
+	# initial simplify: mk specialiser happy: minimum effort please
+	'-fsimplify',
+	  '[', 
+	  $Oopt_FB_Support,
+	  '-fkeep-spec-pragma-ids',	# required before specialisation
+
+# I don't understand why we want -fessential-unfoldings-only here
+# If we have it, the following nasty thing happens:
+#	f  = E
+#	g* = f
+#	...g...
+# where "*" means exported.
+# In the essential-unfoldings pass we still substitute f for g
+# but we don't substitute E for f first.  So we get
+#	f  = E
+#	g* = f
+#	...f...
+# The g=f will get reverse-substituted later, but it's untidy.
+#
+#	  '-fessential-unfoldings-only',
+#	  '-fsimpl-uf-use-threshold0',
+
+	  '-fmax-simplifier-iterations1',
+	  $Oopt_PedanticBottoms,
+	  ']',
+
+	($Oopt_DoSpecialise) ? (
+	  '-fspecialise-overloaded',
+	  $Oopt_SpecialiseUnboxed,
+	  $Oopt_DoSpecialise,
+	) : (),
+
+	'-fsimplify', 			# need dependency anal after specialiser ...
+	  '[', 			# need tossing before calc-inlinings ...
+	  $Oopt_FB_Support,
+	  '-ffloat-lets-exposing-whnf',
+	  '-ffloat-primops-ok',
+	  '-fcase-of-case',
+	  '-fdo-case-elim',
+	  '-fcase-merge',
+#	  '-fdo-eta-reduction',
+	  '-fdo-lambda-eta-expansion',
+	  '-freuse-con',
+	  $Oopt_PedanticBottoms,
+	  $Oopt_MonadEtaExpansion,
+	  $Oopt_MaxSimplifierIterations,
+	  $Oopt_ShowSimplifierProgress,
+	  #
+	  # The presence of -fclone-binds is *crucial* here as
+	  # -ffull-laziness (which we're about to do next) floats
+	  # bindings outwards, so we better make sure that this
+	  # doesn't result in the floating out of bindings
+	  # with identical uniques, i.e., -ffull-laziness needs
+	  # to be preceeded by a simplifier pass with -fclone-binds
+	  # set.
+          '-fclone-binds',
+	  ']',
+
+#LATER:	'-fcalc-inlinings1', -- pointless for 2.01
+
+#	($Oopt_FoldrBuildWW) ? (
+#		'-ffoldr-build-ww-anal',
+#		'-ffoldr-build-worker-wrapper',
+#		'-fsimplify', 
+#		  '[', 
+#		  $Oopt_FB_Support,
+#		  '-ffloat-lets-exposing-whnf',
+#		  '-ffloat-primops-ok',
+#		  '-fcase-of-case',
+#		  '-fdo-case-elim',
+#		  '-fcase-merge',
+#		  '-fdo-eta-reduction',
+#		  '-fdo-lambda-eta-expansion',
+#		  '-freuse-con',
+#		  $Oopt_PedanticBottoms,
+#		  $Oopt_MonadEtaExpansion,
+#		  $Oopt_MaxSimplifierIterations,
+#		  $Oopt_ShowSimplifierProgress,
+#		  ']',
+#	 ) : (),
+
+	# this pass-ordering sequence was agreed by Simon and Andr\'e
+	# (WDP 94/07, 94/11).
+	'-ffull-laziness',
+
+	($Oopt_FoldrBuild) ? (
+	  '-ffoldr-build-on',		# desugar list comprehensions for foldr/build
+
+	  '-fsimplify', 
+	    '[', 
+	    '-fignore-inline-pragma',	# **** NB!
+	    '-fdo-foldr-build',		# NB
+	    $Oopt_FB_Support,
+	    '-ffloat-lets-exposing-whnf',
+	    '-ffloat-primops-ok',
+	    '-fcase-of-case',
+	    '-fdo-case-elim',
+	    '-fcase-merge',
+#	    '-fdo-eta-reduction',
+	    '-fdo-lambda-eta-expansion',	# After full laziness
+	    '-freuse-con',
+	    $Oopt_PedanticBottoms,
+	    $Oopt_MonadEtaExpansion,
+	    $Oopt_MaxSimplifierIterations,
+	    $Oopt_ShowSimplifierProgress,
+	    ']',
+	) : (),
+
+	'-ffloat-inwards',
+
+	'-fsimplify',
+	  '[', 
+	  $Oopt_FB_Support,
+	  '-ffloat-lets-exposing-whnf',
+	  '-ffloat-primops-ok',
+	  '-fcase-of-case',
+	  '-fdo-case-elim',
+	  '-fcase-merge',
+	  '-fdo-eta-reduction',
+	  '-fdo-lambda-eta-expansion',
+	  '-freuse-con',
+  	  ($Oopt_FoldrBuildInline),
+			# you need to inline foldr and build
+	  ($Oopt_FoldrBuild) ? ('-fdo-foldr-build') : (), 
+			# but do reductions if you see them!
+	  $Oopt_PedanticBottoms,
+	  $Oopt_MonadEtaExpansion,
+	  $Oopt_MaxSimplifierIterations,
+	  $Oopt_ShowSimplifierProgress,
+	  ']',
+
+	'-fstrictness',
+
+	'-fsimplify',
+	  '[', 
+	  $Oopt_FB_Support,
+	  '-ffloat-lets-exposing-whnf',
+	  '-ffloat-primops-ok',
+	  '-fcase-of-case',
+	  '-fdo-case-elim',
+	  '-fcase-merge',
+#	  '-fdo-eta-reduction',
+	  '-fdo-lambda-eta-expansion',
+	  '-freuse-con',
+	  '-flet-to-case',		# Aha! Only done after strictness analysis
+	  $Oopt_PedanticBottoms,
+	  $Oopt_MonadEtaExpansion,
+	  $Oopt_MaxSimplifierIterations,
+	  $Oopt_ShowSimplifierProgress,
+	  ']',
+
+	'-ffloat-inwards',
+
+# Case-liberation for -O2.  This should be after
+# strictness analysis and the simplification which follows it.
+
+#	( ($OptLevel != 2)
+#        ? ''
+#	: "-fliberate-case -fsimplify [ $Oopt_FB_Support -ffloat-lets-exposing-whnf -ffloat-primops-ok -fcase-of-case -fdo-case-elim -fcase-merge -fdo-eta-reduction -fdo-lambda-eta-expansion -freuse-con -flet-to-case $Oopt_PedanticBottoms $Oopt_MonadEtaExpansion $Oopt_MaxSimplifierIterations $Oopt_ShowSimplifierProgress ]" ),
+
+# Final clean-up simplification:
+
+	'-fsimplify',
+	  '[', 
+	  $Oopt_FB_Support,
+	  '-ffloat-lets-exposing-whnf',
+	  '-ffloat-primops-ok',
+	  '-fcase-of-case',
+	  '-fdo-case-elim',
+	  '-fcase-merge',
+#	  '-fdo-eta-reduction',
+	  '-fdo-lambda-eta-expansion',
+	  '-freuse-con',
+	  '-flet-to-case',
+	  '-fignore-inline-pragma',	# **** NB!
+	  $Oopt_FoldrBuildInline,	
+	  ($Oopt_FoldrBuild) ? ('-fdo-foldr-build') : (), 
+			# but still do reductions if you see them!
+	  $Oopt_PedanticBottoms,
+	  $Oopt_MonadEtaExpansion,
+	  $Oopt_MaxSimplifierIterations,
+	  $Oopt_ShowSimplifierProgress,
+	  ']',
+
+      #	'-fstatic-args',
+
+#LATER:	'-fcalc-inlinings2', -- pointless for 2.01
+
+      # stg2stg passes
+	'-flambda-lift',
+	$Oopt_FinalStgProfilingMassage,
+	$Oopt_StgStats,
+
+      # flags for stg2stg
+	'-flet-no-escape',
+
+      # SPECIAL FLAGS for -O2
+	($OptLevel == 2) ? (
+	  '-fupdate-analysis',	# virtually useless; relegated to -O2
+	  '-fsemi-tagging',
+	) : (),
+      );
+
+\end{code}
+
+Sort out what we're going to do about optimising.  First, the @hsc@
+flags and regular @cc@ flags to worry about:
+\begin{code}
+if ( $OptLevel <= 0 ) {
+
+    # for this level, we tell the parser -fignore-interface-pragmas
+    push(@HsC_flags, '-fignore-interface-pragmas');
+    # and tell the compiler not to produce them
+    push(@HsC_flags, '-fomit-interface-pragmas');
+
+    &add_Hsc_flags( @HsC_minusNoO_flags );
+    push(@CcBoth_flags, ($MinusO2ForC) ? '-O2' : '-O');	# not optional!
+
+} elsif ( $OptLevel == 1 || $OptLevel == 2 ) {
+
+    &add_Hsc_flags( @HsC_minusO_flags );
+    push(@CcBoth_flags, ($MinusO2ForC || $OptLevel == 2) ? '-O2' : '-O'); # not optional!
+    # -O? to GCC is not optional! -O2 probably isn't worth it generally,
+    # but it *is* useful in compiling the garbage collectors (so said
+    # Patrick many moons ago...).
+
+} else { # -Ofile, then...
+
+    &add_Hsc_flags( @HsC_minusO3_flags );
+    push(@HsC_flags, $Oopt_FinalStgProfilingMassage) if $Oopt_FinalStgProfilingMassage;
+
+    push(@CcBoth_flags, ($MinusO2ForC) ? '-O2' : '-O');	# possibly to be elaborated...
+}
+
+} # setupOptimiseFlags
+
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection{Check for consistency, etc.}
+%*									*
+%************************************************************************
+
+Sort out @$BuildTag@, @$PROFing@, @$CONCURing@, @$PARing@,
+@$GRANing@, @$TICKYing@:
+\begin{code}
+sub setupBuildFlags {
+
+
+   # PROFILING stuff after argv mangling:
+   if ( ! $PROFing ) {
+     # warn about any scc exprs found (in case scc used as identifier)
+     push(@HsP_flags, '-W');
+
+     # add -auto sccs even if not profiling !
+     push(@HsC_flags, $UNPROFscc_auto) if $UNPROFscc_auto;
+
+   } else {
+      push(@HsC_flags, $PROFauto) if $PROFauto;
+      push(@HsC_flags, $PROFcaf)  if $PROFcaf;
+      #push(@HsC_flags, $PROFdict) if $PROFdict;
+
+      $Oopt_FinalStgProfilingMassage = '-fmassage-stg-for-profiling';
+
+      # Ignore user sccs when auto annotating, but warn when doing so.
+      $PROFignore_scc = '-W' if $PROFauto; 
+
+      push(@HsP_flags, (($PROFignore_scc) ? $PROFignore_scc : '-S'));
+
+      if ( $SplitObjFiles ) {
+	 # can't split with cost centres -- would need global and externs
+    	 print STDERR "$Pgm: WARNING: splitting objects when profiling will *BREAK* if any _scc_s are present!\n";
+	 # (but it's fine if there aren't any _scc_s around...)
+#	 $SplitObjFiles = 0; # unset
+	 #not an error: for now: $Status++;
+      }
+  }
+  #if ( $BuildTag ne '' ) {
+  #    local($b) = $BuildDescr{$BuildTag};
+  #    if ($CONCURing eq 'c') { print STDERR "$Pgm: Can't mix $b with -concurrent.\n"; exit 1; }
+  #    if ($PARing    eq 'p') { print STDERR "$Pgm: Can't mix $b with -parallel.\n"; exit 1; }
+  #    if ($GRANing   eq 'g') { print STDERR "$Pgm: Can't mix $b with -gransim.\n"; exit 1; }
+  #    if ($TICKYing  eq 't') { print STDERR "$Pgm: Can't mix $b with -ticky.\n"; exit 1; }
+
+  #    # ok to have a user-way profiling build
+  #    # eval the profiling opts ... but leave user-way BuildTag 
+  #    if ($PROFing   eq 'p') { &processArgs(split(' ', $SetupOpts{'_p'})); } # eval($EvaldSetupOpts{'_p'}); }
+
+  if ( $PROFing eq 'p' ) {
+      if ($PARing   eq 'p') { print STDERR "$Pgm: Can't do profiling with -parallel.\n"; exit 1; }
+      if ($GRANing  eq 'g') { print STDERR "$Pgm: Can't do profiling with -gransim.\n"; exit 1; }
+      if ($TICKYing eq 't') { print STDERR "$Pgm: Can't do profiling with -ticky.\n"; exit 1; }
+      $BuildTag = ($CONCURing eq 'c') ? '_mr' : '_p' ; # possibly "profiled concurrent"...
+
+  } elsif ( $CONCURing eq 'c' ) {
+      if ($PARing  eq 'p') { print STDERR "$Pgm: Can't mix -concurrent with -parallel.\n"; exit 1; }
+      if ($GRANing eq 'g') { print STDERR "$Pgm: Can't mix -concurrent with -gransim.\n"; exit 1; }
+      $BuildTag = ($TICKYing eq 't')  ? '_mt' : '_mc' ; # possibly "ticky concurrent"...
+      # "profiled concurrent" already acct'd for...
+
+  } elsif ( $PARing eq 'p' ) {
+      if ($GRANing  eq 'g') { print STDERR "$Pgm: Can't mix -parallel with -gransim.\n"; exit 1; }
+      if ($TICKYing eq 't') { print STDERR "$Pgm: Can't mix -parallel with -ticky.\n"; exit 1; }
+      $BuildTag = '_mp';
+
+      if ( $Do_lnkr && ( ! $ENV{'PVM_ROOT'} || ! $ENV{'PVM_ARCH'} )) {
+	  print STDERR "$Pgm: both your PVM_ROOT and PVM_ARCH environment variables must be set for linking under -parallel.\n";
+	  exit(1);
+      }
+
+  } elsif ( $GRANing eq 'g' ) {
+      if ($TICKYing eq 't') { print STDERR "$Pgm: Can't mix -gransim with -ticky.\n"; exit 1; }
+      $BuildTag = '_mg';
+
+  } elsif ( $TICKYing eq 't' ) {
+      $BuildTag = '_t';
+  }
+
+\end{code}
+
+After the sanity checks, add flags to the necessary parts of the driver pipeline:
+
+\begin{code}
+  if ( $BuildTag ne '' ) { # something other than normal sequential...
+
+      local($Tag) = "${BuildTag}";
+      $Tag =~ s/_//;  # move the underscore to the back
+
+      $HscOut = '-C='; # must go via C
+      &processArgs(split(' ', $SetupOpts{$BuildTag}));
+#      eval($EvaldSetupOpts{$BuildTag});
+  }
+\end{code}
+
+Decide what the consistency-checking options are in force for this run:
+\begin{code}
+
+  $HsC_consist_options = "${BuildTag},${DEBUGging}";
+  $Cc_consist_options  = "${BuildTag},${DEBUGging}";
+
+  #
+  # Funny place to put it, but why not.
+  #
+  if ( $HiSuffix_prelude eq '' ) {
+       local($Tag) = "${BuildTag}";
+       $Tag =~ s/_//;
+       $Tag = "${Tag}_" if $Tag ne '';
+       $HiSuffix_prelude="${Tag}hi";
+  }
+  #push(@HsC_flags, "-hisuf-prelude=.${HiSuffix_prelude}"); # use appropriate Prelude .hi files
+  #push(@HsC_flags, "-hisuf=.${HiSuffix}");
+
+} # setupBuildFlags
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection{Add on machine-specific C-compiler flags}
+%*									*
+%************************************************************************
+
+Shove on magical machine-specific options.  We use \tr{unshift} to
+stick them on the {\em front} of the arrays, so that ``later''
+user-specified flags can clobber them (e.g., \tr{-U__STG_REV_TBLS__}).
+
+Note: a few ``always apply'' flags were set at the very beginning.
+
+\begin{code}
+sub setupMachOpts {
+
+  if ($TargetPlatform =~ /^alpha-/) {
+      # we know how to *mangle* asm for alpha
+      unshift(@CcRegd_flags, ('-D__STG_REV_TBLS__'));
+      unshift(@CcRegd_flags, ('-DSTACK_CHECK_BY_PAGE_FAULT=1')) if $StkChkByPageFaultOK;
+      unshift(@CcBoth_flags,  ('-static'));
+
+  } elsif ($TargetPlatform =~ /^hppa/) {
+      # we know how to *mangle* asm for hppa
+      unshift(@CcRegd_flags, ('-D__STG_REV_TBLS__'));
+      unshift(@CcBoth_flags,  ('-static'));
+      #
+      # We don't put in '-mlong-calls', because it's only
+      # needed for very big modules (sigh), and we don't want
+      # to hobble ourselves further on all the other modules
+      # (most of them).
+      #  
+      # [Dated comment (gcc-2.6.x?), -mlong-calls is no longer
+      #  a supported gcc HPPA flag]
+      unshift(@CcBoth_flags,  ('-D_HPUX_SOURCE'));
+        # ___HPUX_SOURCE, not _HPUX_SOURCE, is #defined if -ansi!
+        # (very nice, but too bad the HP /usr/include files don't agree.)
+
+  } elsif ($TargetPlatform =~ /^i386-/) {
+      # we know how to *mangle* asm for X86
+      unshift(@CcRegd_flags, ('-D__STG_REV_TBLS__'));
+      unshift(@CcRegd_flags, ('-DSTACK_CHECK_BY_PAGE_FAULT=1')) if $StkChkByPageFaultOK && $TargetPlatform !~ /nextstep/;
+      # I do not know how to do STACK_CHECK_BY_PAGE_FAULT
+      # on NeXTs (my fault, not theirs), so I don't.
+      # CaS
+
+      # -fno-defer-pop : basically the same game as for m68k
+      #
+      # -fomit-frame-pointer : *must* ; because we're stealing
+      #	 the fp (%ebp) for our register maps.  *All* register
+      #	 maps (in MachRegs.lh) must steal it.
+
+      unshift(@CcRegd_flags_hc, '-fno-defer-pop');
+      unshift(@CcRegd_flags,    '-fomit-frame-pointer');
+      unshift(@CcRegd_flags,    "-DSTOLEN_X86_REGS=$StolenX86Regs");
+
+  } elsif ($TargetPlatform =~ /^m68k-/) {
+      # we know how to *mangle* asm for m68k
+      unshift (@CcRegd_flags, ('-D__STG_REV_TBLS__'));
+      unshift (@CcRegd_flags, ('-DSTACK_CHECK_BY_PAGE_FAULT=1')) if $StkChkByPageFaultOK && $TargetPlatform !~ /nextstep/;
+      # I do not know how to do STACK_CHECK_BY_PAGE_FAULT
+      # on NeXTs (my fault, not theirs), so I don't.
+      # CaS
+
+      # -fno-defer-pop : for the .hc files, we want all the pushing/
+      #    popping of args to routines to be explicit; if we let things
+      #    be deferred 'til after an STGJUMP, imminent death is certain!
+      #
+      # -fomit-frame-pointer : *don't*
+      #	   It's better to have a6 completely tied up being a frame pointer
+      #	   rather than let GCC pick random things to do with it.
+      #	   (If we want to steal a6, then we would try to do things
+      #	   as on iX86, where we *do* steal the frame pointer [%ebp].)
+
+      unshift(@CcRegd_flags_hc, '-fno-defer-pop');
+      unshift(@CcRegd_flags,    '-fno-omit-frame-pointer');
+	# maybe gives reg alloc a better time
+	# also: -fno-defer-pop is not sufficiently well-behaved without it
+
+  } elsif ($TargetPlatform =~ /^mips-/) {
+      # we (hope to) know how to *mangle* asm for MIPSen
+      unshift(@CcRegd_flags, ('-D__STG_REV_TBLS__'));
+      unshift(@CcRegd_flags, ('-DSTACK_CHECK_BY_PAGE_FAULT=1')) if $StkChkByPageFaultOK;
+      unshift(@CcBoth_flags,  ('-static'));
+
+  } elsif ($TargetPlatform =~ /^powerpc-|^rs6000-/) {
+      # we know how to *mangle* asm for PowerPC
+# :-(   unshift(@CcRegd_flags, ('-D__STG_REV_TBLS__'));
+      unshift(@CcRegd_flags, ('-DSTACK_CHECK_BY_PAGE_FAULT=1')) if $StkChkByPageFaultOK;
+      unshift(@CcBoth_flags,  ('-static')); # always easier to start with
+      unshift(@CcRegd_flags, ('-finhibit-size-directive')); # avoids traceback tables
+  } elsif ($TargetPlatform =~ /^sparc-/) {
+      # we know how to *mangle* asm for SPARC
+      unshift(@CcRegd_flags, ('-D__STG_REV_TBLS__'));
+      unshift(@CcRegd_flags, ('-DSTACK_CHECK_BY_PAGE_FAULT=1')) if $StkChkByPageFaultOK;
+
+  }
+} # end of setupMachOpts
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection{Set up for warnings}
+%*									*
+%************************************************************************
+
+Several warnings are turned on by default.  These are supposed to be
+the 'I'm pretty sure you've made a mistake here' kind of warnings.
+The rest are turned on by the -W and -Wall options, or individually
+via their -fwarn and -fno-warn flags.
+
+\begin{code}
+sub setupWarningFlags {
+&add_Hsc_flags( @StandardWarnings );
+}
+\end{code}
+
+Same unshifting magic, but for special linker flags.
+
+The configure script determines whether the object file symbol tables
+have a leading underscore, and sets @LeadingUnderscore@ accordingly.
+(The driver script `sees' the setting of the @LeadingUnderscore@
+by having the Makefile prepend it).
+
+\begin{code}
+sub setupLinkOpts {
+  local($uscore) = ( ${LeadingUnderscore} eq 'YES' ) ? '_' : '';
+
+  unshift(@Ld_flags,
+        (($Ld_main) ? ( '-u', "${uscore}Main_" . $Ld_main . '_closure' ) : ()));
+  unshift(@Ld_flags,
+	(  '-u', "${uscore}PrelBase_Z91Z93_closure"	 # i.e., []
+          ,'-u', "${uscore}PrelBase_IZh_static_info"
+          ,'-u', "${uscore}PrelBase_CZh_static_info"
+          ,'-u', "${uscore}PrelBase_False_inregs_info"
+          ,'-u', "${uscore}PrelBase_True_inregs_info"
+          ,'-u', "${uscore}DEBUG_REGS"
+	));
+  if ($TargetPlatform =~ /^powerpc-|^rs6000-/) {
+    # sometimes we have lots of toc entries...
+    #  unshift(@Ld_flags, ('-Xlinker -bbigtoc -Xlinker -bnoquiet')); 
+    unshift(@Ld_flags, ('-Xlinker -bbigtoc')); 
+  }
+
+} # end of setupLinkOpts
+
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection{Set up include paths and system-library enslurpment}
+%*									*
+%************************************************************************
+
+Now that we know what garbage-collector, etc., are required, we can
+finalise our list of libraries to slurp through, and generally Get
+Ready for Business.
+
+\begin{code}
+sub setupIncPaths {
+  # default includes must be added AFTER option processing
+  if ( ! $INSTALLING ) {
+      push (@Include_dir, "$TopPwd/${CURRENT_DIR}/${GHC_INCLUDE_DIR}");
+  } else {
+      push (@Include_dir, "$InstLibDirGhc/includes");
+      push (@Include_dir, "$InstLibDirGhc/includes");
+  }
+} # end of setupIncPaths
+\end{code}
+
+\begin{code}
+sub setupSyslibs {
+  push(@SysLibrary, ( '-lHS', '-lHS_cbits' )); # basic I/O and prelude stuff
+
+  local($f);
+  foreach $f (@SysLibrary) {
+      next if $f =~ /_cbits/;
+      $f .= $BuildTag if $f =~ /^-lHS/;
+  }
+
+  # fiddle the TopClosure file name...
+  $TopClosureFile =~ s/XXXX//;
+
+  # Push library HSrts, plus boring clib bit
+  push(@SysLibrary, "-lHSrts${BuildTag}");
+  push(@SysLibrary, '-lHSclib');
+  #
+  # RTS compiled with cygwin32, uses the WinMM API
+  # to implement the itimers, since cygwin.dll does not
+  # support it. Only reqd. for `ways' that use itimers.
+  #
+  push(@SysLibrary, '-lwinmm') if $BuildTag ne '' && $TargetPlatform eq 'i386-unknown-cygwin32';
+
+  # Push the pvm libraries
+  if ($BuildTag eq '_mp') {
+      $pvmlib = "$ENV{'PVM_ROOT'}/lib/$ENV{'PVM_ARCH'}";
+      push(@SysLibrary, "-L$pvmlib", '-lpvm3', '-lgpvm3');
+      if ( $ENV{'PVM_ARCH'} eq 'SUNMP' ) {
+          push(@SysLibrary, '-lthread', '-lsocket', '-lnsl');
+      } elsif ( $ENV{'PVM_ARCH'} eq 'SUN4SOL2' ) {
+          push(@SysLibrary, '-lsocket', '-lnsl');
+      }
+  }
+
+# Push the GNU multi-precision arith lib; and the math library
+push(@SysLibrary, '-lgmp');
+push(@SysLibrary, '-lm');
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection{Check that this system was built to do what we are asking}
+%*									*
+%************************************************************************
+
+Before continuing we check that the appropriate build is available.
+
+\begin{code}
+#die "$Pgm: no BuildAvail?? $BuildTag\n" if $BuildDescr{$BuildTag} eq '' ; # sanity
+
+if ( $BuildDescr{$BuildTag} eq '' ) {
+    print STDERR "$Pgm: a `", $BuildDescr{$BuildTag},
+	"' \"build\" is not available with your GHC setup.\n";
+    print STDERR "(It was not configured for it at your site.)\n";
+    print STDERR $ShortUsage;
+    exit 1;
+}
+
+} # end of setupSyslibs
+
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection{Final miscellaneous setup bits before we start going}
+%*									*
+%************************************************************************
+
+Record largest specific heapsize, if any.
+\begin{code}
+sub setupHeapStackSize {
+   $Specific_heap_size = $Specific_heap_size * $Scale_sizes_by;
+   push(@HsC_rts_flags, '-H'.$Specific_heap_size);
+   $Specific_stk_size = $Specific_stk_size * $Scale_sizes_by;
+   push(@HsC_rts_flags, "-K$Specific_stk_size");
+}
+\end{code}
+
+If no input or link files seen, then we let 'em feed in stdin; this is
+mainly for debugging.
+
+\begin{code}
+
+if ($#Input_file < 0 && $#Link_file < 0) {
+    @Input_file = ( '-' );
+
+    open(INF, "> $Tmp_prefix.hs") || &tidy_up_and_die(1,"Can't open $Tmp_prefix.hs\n");
+    print STDERR "Enter your Haskell program, end with ^D (on a line of its own):\n" if -t;
+    while (<STDIN>) { print INF $_; }
+    close(INF) || &tidy_up_and_die(1,"Failed writing to $Tmp_prefix.hs\n");
+}
+
+\end{code}
+
+Tell the world who we are, if they asked.
+\begin{code}
+print STDERR "${ProjectName}, version ${ProjectVersion}, patchlevel ${ProjectPatchLevel}\n"
+    if $Verbose;
+\end{code}
+
+%************************************************************************
+%*									*
+\section[Driver-main-loop]{Main loop: Process input files, and link if required}
+%*									*
+%************************************************************************
+
+Process the input files; don't continue with linking if there are
+problems (global variable @$Status@ non-zero).
+\begin{code}
+foreach $ifile (@Input_file) {
+    &ProcessInputFile($ifile);
+}
+
+if ( $Status > 0 ) { # don't link if there were errors...
+    print STDERR $ShortUsage;
+    &tidy_up();
+    exit $Status;
+}
+
+# append last minute flags linker and consistency flags
+&setupBuildFlags();
+&setupSyslibs();
+&setupLinkOpts();
+
+\end{code}
+
+Link if appropriate.
+\begin{code}
+if ($Do_lnkr) {
+    local($libdirs) = '';
+
+    # glue them together:
+    push(@UserLibrary_dir, @SysLibrary_dir);
+
+    $libdirs = '-L' . join(' -L',@UserLibrary_dir) if $#UserLibrary_dir >= 0;
+
+    # for a linker, use an explicitly given one, or the going C compiler ...
+    local($lnkr) = ( $Lnkr ) ? $Lnkr : $CcRegd;
+
+    if ( ($Specific_output_file eq '') && 
+         ($TargetPlatform eq 'i386-unknown-cygwin32') ) {
+         $Specific_output_file = 'main.exe';
+         print STDERR "Output file not specified, defaulting to \"main.exe\"\n";
+    }
+
+    local($output) = ($Specific_output_file ne '') ? "-o $Specific_output_file" : '';
+    @Files_to_tidy = ($Specific_output_file ne '') ? $Specific_output_file : 'a.out'; 
+
+    local($to_do) = "$lnkr $Verbose @Ld_flags $output @Link_file $TopClosureFile $libdirs @UserLibrary @SysLibrary";
+    &run_something($to_do, 'Linker');
+
+    # finally, check the consistency info in the binary
+    local($executable) = $Files_to_tidy[0];
+    @Files_to_tidy = (); # reset; we don't want to nuke it if it's inconsistent
+
+    if ( $LinkChk ) {
+    	# dynamically load consistency-chking code; then do it.
+	require('ghc-consist.prl')
+	    || &tidy_up_and_die(1,"$Pgm: panic: can't load ghc-consist.prl!\n");
+
+    	&chk_consistency_info ( $executable );
+    }
+
+    # if PVM parallel stuff, we do truly weird things.
+    # Essentially: (1) move the executable over to where PVM expects
+    # to find it.  (2) create a script in place of the executable
+    # which will cause the program to be run, via SysMan.
+    if ( $PARing eq 'p' ) {
+	local($pvm_executable) = $executable;
+	local($pvm_executable_base);
+
+	if ( $pvm_executable !~ /^\// ) { # a relative path name: make absolute
+	    local($pwd) = `pwd`;
+	    chop($pwd);
+	    $pwd =~ s/^\/tmp_mnt//;
+	    $pvm_executable = "$pwd/$pvm_executable";
+	}
+
+	$pvm_executable =~ s|/|=|g; # make /s into =s
+	$pvm_executable_base = $pvm_executable;
+
+	$pvm_executable = $ENV{'PVM_ROOT'} . '/bin/' . $ENV{'PVM_ARCH'}
+			. "/$pvm_executable";
+
+	&run_something("$Rm -f $pvm_executable; $Cp -p $executable $pvm_executable && $Rm -f $executable", 'Moving binary to PVM land');
+
+	# OK, now create the magic script for "$executable"
+	open(EXEC, "> $executable") || &tidy_up_and_die(1,"$Pgm: couldn't open $executable to write!\n");
+	print EXEC <<EOSCRIPT1;
+eval 'exec perl -S \$0 \${1+"\$@"}'
+  if \$running_under_some_shell;
+# =!=!=!=!=!=!=!=!=!=!=!
+# This script is automatically generated: DO NOT EDIT!!!
+# Generated by Glasgow Haskell, version ${ProjectVersion} ${ProjectPatchLevel}
+#
+\$pvm_executable      = '$pvm_executable';
+\$pvm_executable_base = '$pvm_executable_base';
+\$SysMan = '$SysMan';
+EOSCRIPT1
+
+	print EXEC <<\EOSCRIPT2;
+# first, some magical shortcuts to run "commands" on the binary
+# (which is hidden)
+if ($#ARGV == 1 && $ARGV[0] eq '+RTS' && $ARGV[1] =~ /^--((size|file|strip|rm|nm).*)/ ) {
+    local($cmd) = $1;
+    system("$cmd $pvm_executable");
+    exit(0); # all done
+}
+
+# OK, really run it; process the args first
+$ENV{'PE'} = $pvm_executable_base;
+$debug = '';
+$nprocessors = 2; # the default
+@nonPVM_args = ();
+$in_RTS_args = 0;
+
+# ToDo: handle --RTS
+args: while ($a = shift(@ARGV)) {
+    if ( $a eq '+RTS' ) {
+	$in_RTS_args = 1;
+    } elsif ( $a eq '-RTS' ) {
+	$in_RTS_args = 0;
+    }
+    if ( $a eq '-d' && $in_RTS_args ) {
+	$debug = '-';
+    } elsif ( $a =~ /^-N(\d+)/ && $in_RTS_args ) {
+	$nprocessors = $1;
+    } else {
+	push(@nonPVM_args, $a);
+    }
+}
+
+local($return_val) = 0;
+system("$SysMan $debug $pvm_executable $nprocessors @nonPVM_args");
+$return_val = $?;
+system("mv $ENV{'HOME'}/$pvm_executable_base.???.gr .") if -f "$ENV{'HOME'}/$pvm_executable_base.001.gr";
+exit($return_val);
+EOSCRIPT2
+	close(EXEC) || die "Failed closing $executable\n";
+	chmod 0755, $executable;
+    }
+}
+
+# that...  that's all, folks!
+&tidy_up();
+exit $Status; # will still be 0 if all went well
+\end{code}
+
+%************************************************************************
+%*									*
+\section[Driver-do-one-file]{How to process a single input file}
+%*									*
+%************************************************************************
+
+\begin{code}
+sub ProcessInputFile {
+    local($ifile) = @_;	  # input file name
+    local($ifile_root);	  # root of or basename of input file
+    local($ofile_target); # ultimate output file we hope to produce
+			  # from input file (need to know for recomp
+			  # checking purposes)
+    local($hifile_target);# ditto (but .hi file)
+\end{code}
+
+Handle the weirdity of input from stdin.
+\begin{code}
+    if ($ifile ne '-') {
+	($ifile_root  = $ifile) =~ s/\.[^\.\/]+$//;
+	$ofile_target = # may be reset later...
+			($Specific_output_file ne '' && ! $Do_lnkr)
+			? $Specific_output_file
+			: &odir_ify($ifile_root, 'o');
+	$hifile_target= ($Specific_hi_file ne '')
+			? $Specific_hi_file
+			: "$ifile_root.$HiSuffix"; # ToDo: odirify?
+			# NB: may change if $ifile_root isn't module name (??)
+    } else {
+	$ifile = "$Tmp_prefix.hs"; # we know that's where we put the input
+	$ifile_root   = '_stdin';
+	$ofile_target = '_stdout'; # gratuitous?
+	$hifile_target= '_stdout'; # ditto?
+    }
+\end{code}
+
+We need to decide what phases of the compilation system we will run
+over this file.  The defaults are the ones established when processing
+flags.  (That established what the last phase run for all files is.)
+
+We do the pre-recompilation-checker phases here; the rest later.
+\begin{code}
+\end{code}
+
+Look at the suffix and decide what initial phases of compilation may
+be dropped off for this file.  Also the rather boring business of
+which files are coming-in/going-out.
+
+Again, we'll do the post-recompilation-checker parts of this later.
+\begin{code}
+    local($do_lit2pgm)	= ($ifile =~ /\.lhs$/) ? 1 : 0;
+    local($do_hscpp)	= 1; # but "hscpp" might really be "cat"
+    local($do_hsc)	= 1;
+
+    # names of the files to stuff between phases
+    # defaults are temporaries
+    local($in_lit2pgm)	  = $ifile;
+    local($lit2pgm_hscpp) = "$Tmp_prefix.lpp";
+    local($hscpp_hsc)	  = "$Tmp_prefix.cpp";
+    local($hsc_hi)	  = "$Tmp_prefix.hi";
+    local($cc_as_o)	  = "${Tmp_prefix}_o.s"; # temporary for raw .s file if opt C
+    local($cc_as)	  = "$Tmp_prefix.s";	 # mangled or hsc-produced .s code
+    local($as_out)	  = $ofile_target;
+
+    local($is_hc_file) = 1; #Is the C code .hc or .c? Assume .hc for now
+
+    # OK, let's strip off some literate junk..
+    if ($do_lit2pgm) {
+        &runLit2pgm($in_lit2pgm, $lit2pgm_hscpp)
+    } else {
+        $lit2pgm_hscpp = $ifile;
+    }
+
+    #
+    @File_options = ();
+
+    # Scan the top of the de-litted file for {-# OPTIONS #-} pragmas
+    &check_for_source_options($lit2pgm_hscpp,$ifile);
+
+    # Options found in the source file take a back seat, i.e., we scan
+    # them first. Only process the command line again if source file
+    # contained anything of interest *or* there's more than one
+    # input file (we have to reset the options).
+    #
+    if ( $#Input_file >= 0 || $#File_options >= 0) {
+        #@File_options = (@File_options, @Cmd_opts);
+
+        # Now process the command line
+        &initDriverGlobals();
+        &processArgs((@File_options,@Cmd_opts));
+	print STDERR "\nEffective command line: " .
+		     join(' ',(@File_options,@Cmd_opts)) . "\n" if $Verbose;
+    }
+    #
+    # Having got the effective command line scanned, set up
+    # the various options in prep for some real work.
+    #
+    # check the sanity of the BuildTag we're about to use,
+    # and if needs be, add some more flags and setup to
+    # the different phases.
+    #
+    &setupBuildFlags();
+    &setupOptimiseFlags();
+    &setupMachOpts();
+    &setupIncPaths();
+    &setupWarningFlags();
+    &setupHeapStackSize();
+
+    #
+    # These two variables need to be set after the
+    # command-line has been processed and the build options
+    # have be seen set up. This is because command-line options
+    # can control whether to compile vias C or not.
+    # 
+    local($do_cc)	= ( $Do_cc != -1) # i.e., it was set explicitly
+			  ? $Do_cc
+			  : ( ($HscOut eq '-C=') ? 1 : 0 );
+    local($do_as)	= $Do_as;
+    local($hsc_out)	  = ( $HscOut eq '-C=' ) ? "$Tmp_prefix.hc" : "$Tmp_prefix.s" ;
+
+    if ($Only_preprocess_hc) { # stop after having run $Cc -E
+       $do_as=0;
+    }
+    if ($Only_preprocess_C)     { # stop after having run $hscpp
+       $do_hsc=0; $do_cc = 0; $do_as=0;
+    } elsif ($ifile =~ /.lhs$/ || $ifile =~ /.hs$/ ) {
+       ;
+    } elsif ($ifile =~ /\.hc$/ || $ifile =~ /_hc$/ ) { # || $ifile =~ /\.$Isuffix$/o) # ToDo: better
+    	$do_hscpp = 0; $do_hsc = 0; $do_cc = 1;
+	$hsc_out = $ifile;
+    } elsif ($ifile =~ /\.c$/) {
+    	$do_hscpp = 0; $do_hsc = 0; $do_cc = 1;
+	$hsc_out = $ifile; $is_hc_file = 0;
+    } elsif ($ifile =~ /\.s$/) {
+    	$do_hscpp = 0; $do_hsc = 0; $do_cc = 0;
+	$cc_as = $ifile;    
+    } else { # don't know what it is, but nothing to do herein...
+    	$do_hscpp = 0; $do_hsc = 0; $do_cc = 0; $do_as = 0;
+    }
+
+    # hack to avoid running hscpp
+    $HsCpp = $Cat if ! $Cpp_flag_set;
+
+    &runHscpp($in_lit2pgm, $lit2pgm_hscpp, $hscpp_hsc) if $do_hscpp;
+
+\end{code}
+
+We now think about whether to run hsc/cc or not (when hsc produces .s
+stuff, it effectively takes the place of both phases).
+
+To get the output file name right: for each phase that we are {\em
+not} going to run, set its input (i.e., the output of its preceding
+phase) to @"$ifile_root.<suffix>"@.
+
+\begin{code}
+    local($going_interactive) = $HscOut eq '-N=' || $ifile_root eq '_stdin';
+
+    #
+    # Warning issued if -keep-hc-file-too is used without
+    # -fvia-C (or the equivalent)
+    #
+    if ( $HscOut ne '-C=' && $Keep_hc_file_too ) {
+	print STDERR "$Pgm: warning: Native code generator to be used, -keep-hc-file-too will be ignored\n";
+    }
+
+    if (! $do_cc && ! $do_as) { # stopping after hsc
+	$hsc_out = ($Specific_output_file ne '')
+		 ? $Specific_output_file
+		 : &odir_ify($ifile_root, ($HscOut eq '-C=') ? 'hc' : 's');
+
+	$ofile_target = $hsc_out; # reset
+    }
+
+    if (! $do_as) { # stopping after gcc (or hsc)
+	$cc_as = ($Specific_output_file ne '')
+		 ? $Specific_output_file
+		 : &odir_ify($ifile_root, ( $Only_preprocess_hc ) ? 'i' : 's');
+
+	$ofile_target = $cc_as; # reset
+    }
+
+\end{code}
+
+
+Now the Haskell compiler, C compiler, and assembler
+
+\begin{code}
+   if ($do_hsc) {
+	&runHscAndProcessInterfaces( $ifile, $hscpp_hsc, $ifile_root, 
+				     $ofile_target, $hifile_target);
+    }
+
+    if ($do_cc) {
+	&runGcc    ($is_hc_file, $hsc_out, $cc_as_o);
+	&runMangler($is_hc_file, $cc_as_o, $cc_as, $ifile_root) if ! $Only_preprocess_hc;
+    }
+
+    &split_asm_file($cc_as)  if $do_as && $SplitObjFiles;
+
+    # save a copy of the .s file..
+    &saveIntermediate($ifile_root , "s" , $cc_as) if ($do_as && $Keep_s_file_too);
+    &runAs($as_out, $ifile_root) if $do_as;
+\end{code}
+
+Finally, decide what to queue up for linker input.
+\begin{code}
+    # tentatively assume we will eventually produce linker input:
+    push(@Link_file, &odir_ify($ifile_root, 'o'));
+
+#ToDo:    local($or_isuf) = ($Isuffix eq '') ? '' : "|$Isuffix";
+
+
+    if ( $ifile !~ /\.(lhs|hs|hc|c|s|a)$/ && $ifile !~ /_hc$/ ) {
+        # There's sometimes confusion regarding .hi files; users
+	# supplying them on the command line.
+        if ( $ifile =~ /\.hi$/ ) {
+	    print STDERR "$Pgm: warning: found `$ifile' on command line; interface files should not be supplied here - ignoring it.\n";
+        } else {
+	   print STDERR "$Pgm: don't recognise suffix on `$ifile'; passing it through to linker\n";
+        }
+	# oops; we tentatively pushed the wrong thing; fix & do the right thing
+	pop(@Link_file); push(@Link_file, $ifile);
+    }
+
+
+} # end of ProcessInputFile
+\end{code}
+
+%************************************************************************
+%*									*
+\section[Driver-run-phases]{Routines to run the various phases}
+%*									*
+%************************************************************************
+
+\begin{code}
+sub runLit2pgm {
+    local($in_lit2pgm, $lit2pgm_hscpp) = @_;
+
+    local($to_do) = "";
+
+    # Only add #line pragma if we're going to need it.
+    $to_do  = "echo '#line 1 \"$in_lit2pgm\"' > $lit2pgm_hscpp && " if ($Cpp_flag_set);
+    $to_do .= "$Unlit @Unlit_flags $in_lit2pgm -  >> $lit2pgm_hscpp";
+     
+    push(@Files_to_tidy, $lit2pgm_hscpp );
+
+    &run_something($to_do, 'literate pre-processor');
+}
+\end{code}
+
+\begin{code}
+sub runHscpp {
+    local($in_lit2pgm, $lit2pgm_hscpp, $hscpp_hsc) = @_;
+
+    local($to_do) = "";
+
+    # Strictly speaking, echoing of the following line pragma is only required
+    # on non-delit'ed input, as we've already added it during de-lit. However,
+    # hscpp will then add a {-# LINE 1 "$lit2pgm_hsc" -} to the top of the file,
+    # which is not very informative (but harmless). Hence, we uniformly have
+    # {-# LINE 1 "$in_lit2pgm" #-} as the first line to all cpp'ed hsc input.
+    #
+    $to_do = "echo '{-# LINE 1 \"$in_lit2pgm\" -}' > $hscpp_hsc && ";
+
+    if ($HsCpp eq $Cat) {
+	$to_do .= "$HsCpp $lit2pgm_hscpp >> $hscpp_hsc";
+	push(@Files_to_tidy, $hscpp_hsc );
+	&run_something($to_do, 'Ineffective C pre-processor');
+    } else {
+	local($includes) = '-I' . join(' -I',@Include_dir);
+	$to_do .= "$HsCpp $Verbose @HsCpp_flags -D__HASKELL1__=$Haskell1Version -D__GLASGOW_HASKELL__=$GhcVersionInfo $includes $lit2pgm_hscpp >> $hscpp_hsc";
+	push(@Files_to_tidy, $hscpp_hsc );
+	&run_something($to_do, 'Haskellised C pre-processor');
+    }
+   
+    if ( $Only_preprocess_C ) {
+	$to_do = "$Cat $hscpp_hsc";
+	&run_something($to_do, '');
+    }
+
+}
+\end{code}
+
+
+\begin{code}
+sub runHscAndProcessInterfaces {
+    local($ifile, $hscpp_hsc, $ifile_root, $ofile_target, $hifile_target) = @_;
+
+	# $ifile 		is the original input file
+	# $hscpp_hsc		post-unlit, post-cpp, etc., input file
+	# $ifile_root		input filename minus suffix
+	# $ofile_target		the output file that we ultimately hope to produce
+	# $hifile_target	the .hi file ... (ditto)
+	
+    local($source_unchanged) = 1;
+
+    # Check if the source file is up to date relative to the target; in
+    # that case we say "source is unchanged" and let the compiler bail out
+    # early if the import usage information allows it.
+
+    ($i_dev,$i_ino,$i_mode,$i_nlink,$i_uid,$i_gid,$i_rdev,$i_size,
+     $i_atime,$i_mtime,$i_ctime,$i_blksize,$i_blocks) = stat($ifile);
+
+    # The informational messages below are now conditional on -v being set -- SOF
+    if ( $ofile_target ne "_stdin.s" && ! -f $ofile_target ) {
+        print STDERR "$Pgm:compile:Output file $ofile_target doesn't exist\n" if $Verbose;
+	$source_unchanged = 0;
+    }
+
+    ($o_dev,$o_ino,$o_mode,$o_nlink,$o_uid,$o_gid,$o_rdev,$o_size,
+     $o_atime,$o_mtime,$o_ctime,$o_blksize,$o_blocks) = stat(_); # stat info from -f test
+
+    if ( $hifile_target ne "_stdout" && ! -f $hifile_target ) {
+        print STDERR "$Pgm:compile:Interface file $hifile_target doesn't exist\n" if $Verbose;
+	$source_unchanged = 0;
+    }
+
+    ($hi_dev,$hi_ino,$hi_mode,$hi_nlink,$hi_uid,$hi_gid,$hi_rdev,$hi_size,
+     $hi_atime,$hi_mtime,$hi_ctime,$hi_blksize,$hi_blocks) = stat(_); # stat info from -f test
+
+    if ( $ofile_target ne "_stdin.s" && $i_mtime > $o_mtime) {
+    	print STDERR "$Pgm:recompile:Input file $ifile newer than $ofile_target\n" if $Verbose;
+	$source_unchanged = 0;
+    }
+
+    # So if source_unchanged is still "1", we pass on the good news to the compiler
+    # The -recomp flag can disable this, forcing recompilation
+    if ($Do_recomp_chkr && $source_unchanged) {
+	push(@HsC_flags, '-fsource-unchanged');	
+    }	
+
+    # Run the compiler
+
+    &runHsc($ifile_root, $hsc_out, $hsc_hi, $going_interactive);
+
+   # See if it bailed out early, saying nothing needed doing.  
+   # We work this out by seeing if it created an output .hi file
+
+    if ( ! -f $hsc_hi && $ProduceHi !~ /-nohifile=/ ) {
+	# Doesn't exist, so we bailed out early.
+	# Tell the C compiler and assembler not to run
+	$do_cc = 0; $do_as = 0;
+
+	# Update dependency info, touch both object file and 
+	# interface file, so that the following invariant is
+        # maintained:
+	#
+	#   a dependent module's interface file should after recompilation
+        #   checking be newer than the interface files of its imports. 
+        #
+  	# That is, if module A's interface file changes, then module B
+	# (which import from A) needs to be checked.
+        # If A's change does not affect B, which causes the compiler to bail
+	# out early, we still need to touch the interface file of B. The reason
+        # for this is that B may export A's interface.
+	#
+	&run_something("touch $ofile_target",
+		       "Touch $ofile_target,  to propagate dependencies") if $HscOut ne '-N=';
+	&run_something("touch $hifile_target", 
+		       "Touch $hifile_target,  to propagate dependencies") if $ProduceHi =~ /-nohifile=/ ;
+
+    } else {	
+
+     # Didn't bail out early (new .hi file) so we thunder on
+    
+    	# If non-interactive, heave in the consistency info at the end
+    	# NB: pretty hackish (depends on how $output is set)
+    	if ( ! $going_interactive ) {
+	    if ( $HscOut eq '-C=' ) {
+	    $to_do = "echo 'static char ghc_hsc_ID[] = \"\@(#)hsc $ifile\t$HsC_major_version.$HsC_minor_version,$HsC_consist_options\";' >> $hsc_out";
+    
+	    } elsif ( $HscOut eq '-S=' ) {
+		local($consist) = "hsc.$ifile.$HsC_major_version.$HsC_minor_version.$HsC_consist_options";
+		$consist =~ s/,/./g;
+		$consist =~ s/\//./g;
+		$consist =~ s/-/_/g;
+		$consist =~ s/[^A-Za-z0-9_.]/ZZ/g; # ToDo: properly?
+		$to_do = "echo '\n\t.text\n$consist:' >> $hsc_out";
+	    }
+	    &run_something($to_do, 'Pin on Haskell consistency info');	
+    	}   
+
+
+	# Interface-handling is important enough to live off by itself
+        if ( $ProduceHi !~ /-nohifile=/ ) { # If we've produced one, process it.
+	   require('ghc-iface.prl') || &tidy_up_and_die(1,"$Pgm: panic: can't load ghc-iface.prl!\n");
+	   &postprocessHiFile($hsc_hi, $hifile_target, $going_interactive);
+	}
+	# if we're going to split up object files,
+	# we inject split markers into the .hc file now
+	if ( $HscOut eq '-C=' && $SplitObjFiles ) {
+	    &inject_split_markers ( $hsc_out );
+        }
+
+	# save a copy of the .hc file, even if we are carrying on...
+	if ($HscOut eq '-C=' && $do_cc && $Keep_hc_file_too) {
+            &saveIntermediate($ifile_root , "hc" , $hsc_out);
+	}
+
+    }
+}
+\end{code}
+
+
+\begin{code}
+sub runHsc {
+    local($ifile_root, $hsc_out, $hsc_hi, $going_interactive) = @_;
+
+    # prepend comma to HsP flags (so hsc can tell them apart...)
+    foreach $a ( @HsP_flags ) { $a = ",$a" unless $a =~ /^,/; }
+
+    &makeHiMap() unless $HiMapDone;
+    #print STDERR "HiIncludes: $HiIncludeString\n";
+    push(@HsC_flags, "-himap=$HiIncludeString");
+
+    # here, we may produce .hc/.s and/or .hi files
+    local($output) = '';
+    #@Files_to_tidy = ();
+
+    if ( $going_interactive ) {
+	# don't need .hi unless going to show it on stdout:
+	$ProduceHi = '-nohifile=' if ! $HiOnStdout;
+	$do_cc = 0; $do_as = 0; $Do_lnkr = 0; # and we won't go any further...
+    }
+
+    # set up for producing output/.hi; note that flag twiddling
+    # may mean that nothing will actually be produced:
+    $output = "$ProduceHi$hsc_hi $HscOut$hsc_out";
+    push(@Files_to_tidy, $hsc_hi, $hsc_out );
+
+    # if we're compiling foo.hs, we want the GC stats to end up in foo.stat
+    if ( $CollectingGCstats ) {
+	push(@HsC_rts_flags, "-S$ifile_root.stat");
+	push(@Files_to_tidy, "$ifile_root.stat");
+    }
+
+    if ( $CollectGhcTimings ) { # assume $RTS_style eq 'ghc'
+	# emit nofibbish time/bytes-alloc stats to stderr;
+	# see later .stat file post-processing
+	print STDERR "warning: both -Rgc-stats and -Rghc-timing used, -Rghc-timing wins." if $CollectingGCstats;
+	push(@HsC_rts_flags, "-s$Tmp_prefix.stat");
+	push(@Files_to_tidy, "$Tmp_prefix.stat");
+    }
+
+    local($dump) = '';
+    if ($Specific_dump_file ne '') {
+	$dump = "2>> $Specific_dump_file";
+	$Using_dump_file = 1;
+    }
+
+    local($to_do);
+    $to_do = "$HsC @HsP_flags ,$hscpp_hsc $dump @HsC_flags $CoreLint $StgLint $Verbose $output +RTS @HsC_rts_flags";
+    &run_something($to_do, 'Haskell compiler');
+
+    # finish business w/ nofibbish time/bytes-alloc stats
+    &process_ghc_timings() if $CollectGhcTimings;
+}
+\end{code}
+
+Use \tr{@Import_dir} and \tr{@SysImport_dir} to make a tmp file
+of (module-name, pathname) pairs, one per line, separated by a space.
+\begin{code}
+$HiMapDone = 0;
+$HiIncludeString = ();		# dir1:dir2:dir3, to pass to GHC
+
+sub makeHiMap {
+
+    # collect in %HiMap; write later; also used elsewhere in driver
+
+    local($mod, $path, $d, $e);
+
+    # reset the global variables:
+    $HiMapDone = 0;
+    $HiIncludeString = ();		# dir1:dir2:dir3, to pass to GHC
+    
+    foreach $d ( @Import_dir ) {
+	if ($HiIncludeString) { 
+	   $HiIncludeString = "$HiIncludeString:${d}%.${HiSuffix}";
+	} else { 
+	   $HiIncludeString = "$d%.${HiSuffix}"; 
+	}
+
+    }
+
+    foreach $d ( @SysImport_dir ) {
+	if ($HiIncludeString) { 
+	    $HiIncludeString = "$HiIncludeString:${d}%.${HiSuffix_prelude}";
+	} else { 
+	    $HiIncludeString = "${d}%.${HiSuffix_prelude}";
+        }
+    }
+
+    $HiMapDone = 1;
+}
+
+\end{code}
+
+%************************************************************************
+%*									*
+\section[Driver-misc-utils]{Miscellaneous utilities}
+%*									*
+%************************************************************************
+
+%************************************************************************
+%*									*
+\subsection[Driver-odir-ify]{@odir_ify@: Mangle filename if \tr{-odir} set}
+%*									*
+%************************************************************************
+
+\begin{code}
+sub osuf_ify {
+    local($ofile,$def_suffix) = @_;
+
+    return(($Osuffix eq '') ? "$ofile.$def_suffix" : "$ofile.$Osuffix" );
+}
+
+sub odir_ify {
+    local($orig_file, $def_suffix) = @_;
+    if ($Specific_output_dir eq '') {   # do nothing
+    	&osuf_ify($orig_file, $def_suffix);
+    } else {
+	local ($orig_file_only);
+	($orig_file_only = $orig_file) =~ s|.*/||;
+	&osuf_ify("$Specific_output_dir/$orig_file_only",$def_suffix);
+    }
+}
+\end{code}
+
+\begin{code}
+sub runGcc {
+    local($is_hc_file, $hsc_out, $cc_as_o) = @_;
+
+    local($includes) = '-I' . join(' -I', @Include_dir);
+    local($cc);
+    local($s_output);
+    local($c_flags) = "@CcBoth_flags";
+    local($ddebug_flag) = ( $DEBUGging ) ? '-DDEBUG' : '';
+
+    # "input" files to use that are not in some weird directory;
+    # to help C compilers grok .hc files [ToDo: de-hackify]
+    local($cc_help)   = "ghc$$.c";
+    local($cc_help_s) = "ghc$$.s";
+
+    $cc       = $CcRegd;
+    $s_output = ($is_hc_file || $TargetPlatform =~ /^(powerpc|rs6000|hppa|i386)/) ? $cc_as_o : $cc_as;
+    $c_flags .= " @CcRegd_flags";
+    $c_flags .= ($is_hc_file) ? " @CcRegd_flags_hc"  : " @CcRegd_flags_c";
+
+    # C compiler won't like the .hc extension.  So we create
+    # a tmp .c file which #include's the needful.
+    open(TMP, "> $cc_help") || &tidy_up_and_die(1,"$Pgm: failed to open `$cc_help' (to write)\n");
+    if ( $is_hc_file ) {
+	print TMP <<EOINCL;
+#ifdef __STG_GCC_REGS__
+# if ! (defined(MAIN_REG_MAP) || defined(MARK_REG_MAP) || defined(SCAN_REG_MAP) || defined(SCAV_REG_MAP) || defined(FLUSH_REG_MAP))
+#  define MAIN_REG_MAP
+# endif
+#endif
+#include "stgdefs.h"
+EOINCL
+	# user may have asked for #includes to be injected...
+	print TMP @CcInjects if $#CcInjects >= 0;
+    }
+    # heave in the consistency info
+    print TMP "static char ghc_cc_ID[] = \"\@(#)cc $ifile\t$Cc_major_version.$Cc_minor_version,$Cc_consist_options\";\n";
+
+    # and #include the real source
+    print TMP "#include \"$hsc_out\"\n";
+    close(TMP) || &tidy_up_and_die(1,"Failed writing to $cc_help\n");
+
+    # Don't redirect stderr into intermediate file if slamming output onto stdout (e.g., with -E)
+    local($fuse_stderr) = "2>&1" if ! $Only_preprocess_hc;
+    local($to_do) = "$cc $Verbose $ddebug_flag $c_flags @Cpp_define -D__HASKELL1__=$Haskell1Version $includes $cc_help > $Tmp_prefix.ccout $fuse_stderr && ( if [ $cc_help_s != $s_output ] ; then mv $cc_help_s $s_output ; else exit 0 ; fi )";
+    # note: __GLASGOW_HASKELL__ is pointedly *not* #defined at the C level.
+
+    if ( $Only_preprocess_hc ) { # HACK ALERT!
+	$to_do =~ s/ -S\b//g;
+    }
+    push(@Files_to_tidy, $cc_help, $cc_help_s, $s_output );
+    $PostprocessCcOutput = 1 if ! $Only_preprocess_hc;	# hack, dear hack...
+    &run_something($to_do, 'C compiler');
+    $PostprocessCcOutput = 0;
+    if ( $Only_preprocess_hc ) {
+       system("$Cat $Tmp_prefix.ccout");
+    }
+    unlink($cc_help, $cc_help_s);
+}
+\end{code}
+
+\begin{code}
+sub runMangler {
+    local($is_hc_file, $cc_as_o, $cc_as, $ifile_root) = @_;
+
+    if ( $is_hc_file ) {
+	# dynamically load assembler-fiddling code, which we are about to use:
+	require('ghc-asm.prl')
+	|| &tidy_up_and_die(1,"$Pgm: panic: can't load ghc-asm.prl!\n");
+    }
+
+    print STDERR `cat $cc_as_o` if $Dump_raw_asm; # to stderr, before mangling
+
+    if ($is_hc_file) {
+	# post-process the assembler [.hc files only]
+	&mangle_asm($cc_as_o, $cc_as);
+
+
+#OLD: for sanity:
+#OLD:	local($target) = 'oops';
+#OLD:	$target = '-alpha'	if $TargetPlatform =~ /^alpha-/;
+#OLD:	$target = '-hppa'	if $TargetPlatform =~ /^hppa/;
+#OLD:	$target = '-old-asm' 	if $TargetPlatform =~ /^i386-/;
+#OLD:	$target = '-m68k'	if $TargetPlatform =~ /^m68k-/;
+#OLD:	$target = '-mips'	if $TargetPlatform =~ /^mips-/;
+#OLD:	$target = ''		if $TargetPlatform =~ /^powerpc-/;
+#OLD:	$target = '-solaris'	if $TargetPlatform =~ /^sparc-sun-solaris2/;
+#OLD:	$target = '-sparc'	if $TargetPlatform =~ /^sparc-sun-sunos4/;
+#OLD:
+#OLD:	if ( $target ne '' ) {
+#OLD:	    require("ghc-asm$target.prl")
+#OLD:	    || &tidy_up_and_die(1,"$Pgm: panic: can't load ghc-asm$target.prl!\n");
+#OLD:	    &mangle_asm($cc_as_o, "$cc_as-2"); # the OLD one!
+#OLD:	    &run_something("$Cmp -s $cc_as-2 $cc_as || $Diff $cc_as-2 $cc_as 1>&2 || exit 0",
+#OLD:		"Diff'ing old and new mangled .s files"); # NB: to stderr
+#OLD:	}
+
+    } elsif ($TargetPlatform =~ /^hppa/) {
+	# minor mangling of non-threaded files for hp-pa only
+	require('ghc-asm.prl')
+	|| &tidy_up_and_die(1,"$Pgm: panic: can't load ghc-asm-hppa.prl!\n");
+	&mini_mangle_asm_hppa($cc_as_o, $cc_as);
+
+    } elsif ($TargetPlatform =~ /^powerpc|^rs6000/) {
+	# minor mangling of non-threaded files for powerpcs and rs6000s 
+	require('ghc-asm.prl')
+	|| &tidy_up_and_die(1,"$Pgm: panic: can't load ghc-asm-powerpc.prl!\n");
+	&mini_mangle_asm_powerpc($cc_as_o, $cc_as);
+    } elsif ($TargetPlatform =~ /^i386/) {
+	# extremely-minor OFFENSIVE mangling of non-threaded just one file
+	require('ghc-asm.prl')
+	|| &tidy_up_and_die(1,"$Pgm: panic: can't load ghc-asm.prl!\n");
+	&mini_mangle_asm_i386($cc_as_o, $cc_as);
+    }
+
+    # save a copy of the .s file, even if we are carrying on...
+    #if ($do_as && $Keep_s_file_too) {
+    #    &saveIntermediate($ifile_root , "s" , $cc_as);
+    #}
+}
+\end{code}
+
+\begin{code}
+sub runAs {
+    local($as_out, $ifile_root) = @_;
+
+    local($asmblr) = ( $As ) ? $As : $CcRegd;
+
+    if ( ! $SplitObjFiles ) {
+	local($to_do)  = "$asmblr -o $as_out -c @As_flags $cc_as";
+	push(@Files_to_tidy, $as_out );
+	&run_something($to_do, 'Unix assembler');
+
+    } else { # more complicated split-ification...
+
+	# must assemble files $Tmp_prefix__[1 .. $NoOfSplitFiles].s
+
+        # If -odir is used, great, just pin it in front of the
+	# generated split file names. If it hasn't been set, we
+	# snatch it from the ifile_root.
+	#
+	# 
+
+        if ( $Specific_output_dir eq '' ) {
+            $Specific_output_dir = ${ifile_root};
+        }
+
+	for ($f = 1; $f <= $NoOfSplitFiles; $f++ ) {
+	    local($split_out) = &odir_ify("${ifile_root}__${f}",'o');
+	    local($to_do) = "$asmblr -o $split_out -c @As_flags ${Tmp_prefix}__${f}.s";
+	    push(@Files_to_tidy, $split_out );
+
+	    &run_something($to_do, 'Unix assembler');
+	}
+    }
+}
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection[Driver-run-something]{@run_something@: Run a phase}
+%*									*
+%************************************************************************
+
+\begin{code}
+sub run_something {
+    local($str_to_do, $tidy_name) = @_;
+
+    print STDERR "\n$tidy_name:\n\t" if $Verbose;
+    print STDERR "$str_to_do\n" if $Verbose;
+
+    if ($Using_dump_file) {
+        open(DUMP, ">> $Specific_dump_file")
+	    || &tidy_up_and_die(1,"$Pgm: failed to open `$Specific_dump_file'\n");
+	print DUMP "\nCompilation Dump for: $str_to_do\n\n";
+  	close(DUMP) 
+	    || &tidy_up_and_die(1,"$Pgm: failed closing `$Specific_dump_file'\n");
+    }
+
+    local($return_val) = 0;
+
+    if ( length($str_to_do) > 4000) { 
+      # 4000 - on the random side, just like the *real* ARG_MAX 
+      # for some shells.
+
+      # With some shells, command lines of this length may
+      # very well cause trouble. To safeguard against this, we squirrel the
+      # command into a file and exec that.
+      local ($sh) = $ENV{'REAL_SHELL'};
+      print STDERR "Backup plan A: saving cmd line in ${Tmp_prefix}.sh and executing that with $sh\n" if $Verbose;
+      open (TEMP, "> ${Tmp_prefix}.sh") || 
+		&tidy_up_and_die(1,"$Pgm: failed to open `$Tmp_prefix.sh'\n");
+      print TEMP "$Time $str_to_do\n";
+      close (TEMP) ||
+      		&tidy_up_and_die(1,"$Pgm: failed closing `$Tmp_prefix.sh'\n");
+      system("$sh $Tmp_prefix.sh");
+      $return_val = $?;
+      
+      unlink "${Tmp_prefix}.sh";
+    } else {
+      system("$Time $str_to_do");
+      $return_val = $?;
+    }
+
+    if ( $PostprocessCcOutput ) { # hack, continued
+	open(CCOUT, "< $Tmp_prefix.ccout")
+	    || &tidy_up_and_die(1,"$Pgm: failed to open `$Tmp_prefix.ccout'\n");
+	while ( <CCOUT> ) {
+    	    next if /attribute directive ignored/;
+	    next if /call-clobbered/;
+	    next if /from .*COptRegs\.lh/;
+	    next if /from .*(stg|rts)defs\.h:/;
+	    next if /from ghc\d+.c:\d+:/;
+	    next if /from .*\.lc/;
+	    next if /from .*SMinternal\.l?h/;
+	    next if /ANSI C does not support \`long long\'/;
+	    next if /warning:.*was declared \`extern\' and later \`static\'/;
+	    next if /warning: assignment discards \`const\' from pointer target type/;
+	    next if /: At top level:$/;
+	    next if /: In function \`.*\':$/;
+	    next if /\`ghc_cc_ID\' defined but not used/;
+	    print STDERR $_;
+	}
+	close(CCOUT) || &tidy_up_and_die(1,"$Pgm: failed closing `$Tmp_prefix.ccout'\n");
+    }
+
+    if ($return_val != 0) {
+        if ($Using_dump_file) {
+	    print STDERR "Compilation Errors dumped in $Specific_dump_file\n";
+	}
+
+	&tidy_up_and_die($return_val, '');
+    }
+    $Using_dump_file = 0;
+}
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection[Driver-ghc-timing]{Emit nofibbish GHC timings}
+%*									*
+%************************************************************************
+
+NB: nearly the same as in @runstdtest@ script.
+
+\begin{code}
+sub process_ghc_timings {
+    local($StatsFile) = "$Tmp_prefix.stat";
+    local($SysSpecificTiming) = 'ghc';
+
+    open(STATS, $StatsFile) || die "Failed when opening $StatsFile\n";
+    local($max_live)    = 0; 
+    local($tot_live)    = 0; # for calculating residency stuff
+    local($tot_samples) = 0;
+
+    while (<STATS>) {
+	if (! /Minor/ && /^\s*\d+\s+\d+\s+(\d+)\s+\d+\.\d+\%/ ) {
+	 	$max_live = $1 if $max_live < $1;
+		$tot_live += $1;
+		$tot_samples += 1;
+	}
+        $BytesAlloc = $1 if /^\s*([0-9,]+) bytes allocated in the heap/;
+
+	if ( /^\s*([0-9,]+) bytes maximum residency .* (\d+) sample/ ) {
+	    $MaxResidency = $1; $ResidencySamples = $2;
+	}
+
+        $GCs = $1 if /^\s*([0-9,]+) garbage collections? performed/;
+
+	# The presence of -? in the following pattern is only there to
+	# accommodate 0.29 && <= 2.05 RTS'
+	if ( /^\s*INIT\s+time\s*(\d+\.\d\d)s\s*\(\s*-?(\d+\.\d\d)s elapsed\)/ ) {
+	    $InitTime = $1; $InitElapsed = $2;
+	} elsif ( /^\s*MUT\s+time\s*(\d+\.\d\d)s\s*\(\s*(\d+\.\d\d)s elapsed\)/ ) {
+	    $MutTime = $1; $MutElapsed = $2;
+	} elsif ( /^\s*GC\s+time\s*(\d+\.\d\d)s\s*\(\s*(\d+\.\d\d)s elapsed\)/ ) {
+	    $GcTime = $1; $GcElapsed = $2;
+	}
+    }
+    close(STATS) || die "Failed when closing $StatsFile\n";
+    if ( $tot_samples > 0 ) {
+	$ResidencySamples = $tot_samples;
+	$MaxResidency = $max_live;
+	$AvgResidency = int ($tot_live / $tot_samples) ;
+    }
+
+    # warn about what we didn't find
+    print STDERR "Warning: BytesAlloc not found in stats file\n" unless defined($BytesAlloc);
+    print STDERR "Warning: GCs not found in stats file\n" unless defined($GCs);
+    print STDERR "Warning: InitTime not found in stats file\n" unless defined($InitTime);
+    print STDERR "Warning: InitElapsed not found in stats file\n" unless defined($InitElapsed);
+    print STDERR "Warning: MutTime not found in stats file\n" unless defined($MutTime);
+    print STDERR "Warning: MutElapsed not found in stats file\n" unless defined($MutElapsed);
+    print STDERR "Warning: GcTime inot found in stats file\n" unless defined($GcTime);
+    print STDERR "Warning: GcElapsed not found in stats file\n" unless defined($GcElapsed);
+
+    # things we didn't necessarily expect to find
+    $MaxResidency     = 0 unless defined($MaxResidency);
+    $AvgResidency     = 0 unless defined($AvgResidency);
+    $ResidencySamples = 0 unless defined($ResidencySamples);
+
+    # a bit of tidying
+    $BytesAlloc =~ s/,//g;
+    $MaxResidency =~ s/,//g;
+    $GCs =~ s/,//g;
+    $InitTime =~ s/,//g;
+    $InitElapsed =~ s/,//g;
+    $MutTime =~ s/,//g;
+    $MutElapsed =~ s/,//g;
+    $GcTime =~ s/,//g;
+    $GcElapsed =~ s/,//g;
+
+    # print out what we found
+    print STDERR "<<$SysSpecificTiming: ",
+	"$BytesAlloc bytes, $GCs GCs, $AvgResidency/$MaxResidency avg/max bytes residency ($ResidencySamples samples), $InitTime INIT ($InitElapsed elapsed), $MutTime MUT ($MutElapsed elapsed), $GcTime GC ($GcElapsed elapsed)",
+	" :$SysSpecificTiming>>\n";
+
+    # OK, party over
+    unlink $StatsFile;
+}
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection[Driver-dying]{@tidy_up@ and @tidy_up_and_die@: Dying gracefully}
+%*									*
+%************************************************************************
+
+\begin{code}
+sub tidy_up {
+    local($to_do) = "\n$Rm $Tmp_prefix*";
+    if ( $Tmp_prefix !~ /^\s*$/ ) {
+	print STDERR "$to_do\n" if $Verbose;
+	system($to_do);
+    }
+}
+
+sub tidy_up_and_die {
+    local($return_val, $msg) = @_;
+
+    # delete any files to tidy
+    print STDERR "deleting... @Files_to_tidy\n" if $Verbose && $#Files_to_tidy >= 0;
+    unlink @Files_to_tidy if $#Files_to_tidy >= 0;
+
+    &tidy_up();
+    print STDERR $msg;
+    exit (($return_val == 0) ? 0 : 1);
+}
+\end{code}
+
+%************************************************************************
+%*									*
+\subsection[Driver-arg-with-arg]{@grab_arg_arg@: Do an argument with an argument}
+%*									*
+%************************************************************************
+
+Some command-line arguments take an argument, e.g.,
+\tr{-Rmax-heapsize} expects a number to follow.  This can either be
+given a part of the same argument (\tr{-Rmax-heapsize8M}) or as the
+next argument (\tr{-Rmax-heapsize 8M}).  We allow both cases.
+
+Note: no error-checking; \tr{-Rmax-heapsize -Rgc-stats} will silently
+gobble the second argument (and probably set the heapsize to something
+nonsensical).
+\begin{code}
+sub grab_arg_arg {
+    local(*Args, $option, $rest_of_arg) = @_;
+    
+    if ($rest_of_arg ne '') {
+	return($rest_of_arg);
+    } elsif ($#Args >= 0) {
+	local($temp) = $Args[0]; shift(@Args); 
+	return($temp);
+    } else {
+	print STDERR "$Pgm: no argument following $option option\n";
+	$Status++;
+    }
+}
+\end{code}
+
+\begin{code}
+sub isntAntiFlag {
+    local($flag) = @_;
+    local($f);
+
+#Not in HsC_antiflag ## NO!: and not already in HsC_flags
+
+    foreach $f ( @HsC_antiflags ) {
+	return(0) if $flag eq $f;
+    }
+#    foreach $f ( @HsC_flags ) {
+#	return(0) if $flag eq $f;
+#    }
+    return(1);
+}
+
+sub squashHscFlag {  # pretty terrible
+    local($flag) = @_;
+    local($f);
+
+    foreach $f ( @HsC_flags ) {
+	if ($flag eq $f) { $f = ''; }
+    }
+}
+
+sub add_Hsc_flags {
+    local(@flags) = @_;
+    local($f);
+
+    foreach $f ( @flags ) {
+	push( @HsC_flags, $f ) if &isntAntiFlag($f);
+    }
+}
+\end{code}
+
+\begin{code}
+sub add_syslib {
+    local($syslib) = @_;
+    
+    unshift(@SysImport_dir,
+	    $INSTALLING ? "$InstLibDirGhc/imports/$syslib"
+		          : "$TopPwd/$CURRENT_DIR/$GHC_LIB_DIR/$syslib");
+
+    push(@SysLibrary_dir,
+	 $INSTALLING ? ("$InstLibDirGhc")
+                       : ("$TopPwd/$CURRENT_DIR/$GHC_LIB_DIR/$syslib",
+			  "$TopPwd/$CURRENT_DIR/$GHC_LIB_DIR/$syslib/cbits"));
+
+    push(@SysLibrary, "-lHS$syslib");
+    push(@SysLibrary, "-lHS${syslib}_cbits")
+          unless $syslib eq 'contrib' || $syslib eq 'exts' || $syslib eq 'concurrent';
+	  #HACK! they have no cbits
+}
+\end{code}
+
+Source files may have {-# OPTIONS ... #-} pragmas at the top, containing
+command line options we want to append to collection of commands specified
+directly. @check_for_source_options@ looks at the top of a de-lit'ified Haskell
+file for any such pragmas:
+
+\begin{code}
+sub check_for_source_options {
+    local($file,$ifile) = @_;
+    local($comment_start,$comment_end);
+
+    if ($ifile =~ /\.hc$/ || 
+        $ifile =~ /_hc$/  || 
+	$ifile =~ /\.s$/  || 
+	$ifile =~ /_s$/ ) {  # `Real' C intermediate
+       $comment_start = "/\\*";
+       $comment_end   = "\\*/";
+    } else { # Assume it is a file containing Haskell source
+       $comment_start = "{-#";
+       $comment_end   = "#-}";
+    }
+
+    open(FILE,$file) || return(1); # No big loss
+    
+    while (<FILE>) {
+	if ( /^${comment_start} OPTIONS (.*)${comment_end}$/ ) {
+           # add the options found at the back of the command line.
+	   local(@entries) = split(/\s+/,$1);
+	   print STDERR "Found OPTIONS " . join(' ',@entries) . " in $file\n" if $Verbose;
+	   push(@File_options, @entries);
+	}
+        elsif ( /^$/ ) { # ignore empty lines
+           ;
+        }
+        elsif ( /^#line.+$/ ) { # ignore comment lines (unused..ToDo: rm )
+           ;
+        }
+        elsif ( /^{-# LINE.+$/ ) { # ignore line pragmas
+           ;
+        }
+        else { # stop looking, something non-empty / not
+	       # ${comment_start} OPTIONS .. ${comment_end} encountered.
+	    close(FILE);return(0);
+        }
+    }
+    close(FILE);
+    return(0);
+}
+\end{code}
+
+
+We split the initial argv up into three arrays:
+
+  - @Cmd_opts 
+  - @Link_file
+  - @Input_file
+
+the reason for doing so is to be able to deal
+with {-# OPTIONS #-} pragma in source files properly.
+
+\begin{code}
+sub splitCmdLine {
+    local(@args) = @_;
+
+arg: while($_ = $args[0]) {
+    shift(@args);
+    # sigh, we have to deal with these -option arg specially here.
+    /^-(tmpdir|odir|ohi|o|isuf|osuf|hisuf|hisuf-prelude|odump|syslib)$/ && 
+       do { push(@Cmd_opts, $_); push(@Cmd_opts,$args[0]); shift(@args); next arg; };
+    /^--?./  && do { push(@Cmd_opts, $_); next arg; };
+
+    if (/\.([^_]+_)?[oa]$/) {
+	push(@Link_file, $_);
+    } else {
+	push(@Input_file, $_);
+    }
+
+    # input files must exist:
+    if (! -f $_) {
+	print STDERR "$Pgm: input file doesn't exist: $_\n";
+	$Status++;
+    }
+  }
+}    
+
+\end{code}
+
+When saving an intermediate file (.hc or .s) away, we 
+have to prefix any OPTIONS found in the original source file.
+
+\begin{code}
+sub saveIntermediate { 
+  local ($final,$suffix,$tmp)= @_ ;
+  local ($to_do);
+
+  # $final  -- root of where to park ${final}.${suffix}
+  # $tmp    -- temporary file where hsc put the intermediate file.
+
+  # Delete the old file
+  $to_do = "$Rm ${final}.${suffix}"; &run_something($to_do, "Removing old .${suffix} file");
+
+  if ( $#File_options >= 0 ) { # OPTIONS found in Haskell source unit
+    # Add OPTION comment to the top of the generated .${suffix} file
+    open(TEMP, "> ${final}.${suffix}") || &tidy_up_and_die(1,"Can't open ${final}.${suffix}\n");
+    print TEMP "/* OPTIONS " . join(' ',@File_options) . " */\n";
+    close(TEMP);
+    print STDERR "Prepending OPTIONS: " . join(' ',@File_options) . " to ${final}.${suffix}\n" if $Verbose;
+  }
+  $to_do = "$Cat $tmp  >> ${final}.${suffix}";
+  &run_something($to_do, "Saving copy of .${suffix} file");
+
+}
+
+\end{code}
+
+
+Command-line processor
+
+\begin{code}
+sub processArgs {
+    local(@Args) = @_;
+
+# can't use getopt(s); what we want is too complicated
+
+arg: while($_ = $Args[0]) {
+    shift(@Args);
+
+    #---------- help -------------------------------------------------------
+    if (/^-\?$/ || /^--?help$/) { print $LongUsage; exit $Status; }
+
+    #-----------version ----------------------------------------------------
+    /^--version$/   && do { print STDERR "${ProjectName}, version ${ProjectVersion}, patchlevel ${ProjectPatchLevel}\n"; exit $Status; };
+
+    #---------- verbosity and such -----------------------------------------
+    /^-v$/	    && do { $Verbose = '-v'; $Time = 'time'; next arg; };
+
+    #---------- what phases are to be run ----------------------------------
+    /^-(no-)?recomp/	    && do { $Do_recomp_chkr = ($1 eq '') ? 1 : 0; next arg; };
+
+    /^-cpp$/	    && do { $Cpp_flag_set = 1; next arg; };
+    # change the global default:
+    # we won't run cat; we'll run the real thing
+	
+    /^-C$/	    && do { $Do_cc = 0; $Do_as = 0; $Do_lnkr = 0; $HscOut = '-C=';
+			    next arg; };
+    # stop after generating C
+	
+    /^-noC$/	    && do { $HscOut = '-N='; $ProduceHi = '-nohifile=';
+			    $Do_cc = 0; $Do_as = 0; $Do_lnkr = 0;
+			    next arg; };
+    # leave out actual C generation (debugging) [also turns off interface gen]
+
+
+    /^-hi$/	         && do { $HiOnStdout = 1; $ProduceHi = '-hifile='; next arg; };
+    # _do_ generate an interface; usually used as: -noC -hi
+    /^-hi-with-(.*)$/    && do { $HiOnStdout = 1; $HiWith .= " $1" ; $ProduceHi = '-hifile='; next arg; };
+    # limit ourselves to outputting a particular section.
+
+    /^-nohi$/	    && do { $ProduceHi = '-nohifile='; next arg; };
+    # don't generate an interface (even if generating C)
+
+    /^-hi-diffs$/             && do { $HiDiff_flag  = 'normal'; next arg; };
+    /^-hi-diffs-with-usages$/ && do { $HiDiff_flag  = 'usages'; next arg; };
+    /^-no-hi-diffs$/          && do { $HiDiff_flag  = '';       next arg; };
+    /^-keep-hi-diffs$/	      && do { $Keep_HiDiffs = 1; next arg; };
+
+    # show/disable diffs if the interface file changes
+
+    /^-E$/	    && do { push(@CcBoth_flags, '-E');
+			    $Only_preprocess_C = 1;
+			    $Do_as = 0; $Do_lnkr = 0; next arg; };
+    # stop after preprocessing C
+    /^-M$/	    && do { $Only_generate_deps = 1; $Do_as = 0; $Do_lnkr = 0; next arg; };
+    # only generate dependency information.
+    /^-S$/	    && do { $Do_as = 0; $Do_lnkr = 0; next arg; };
+    # stop after generating assembler
+	
+    /^-c$/	    && do { $Do_lnkr = 0; next arg; };
+    # stop after generating .o files
+
+    /^-link-chk$/    && do { $LinkChk = 1; next arg; };
+    /^-no-link-chk$/ && do { $LinkChk = 0; next arg; };
+    # don't do consistency-checking after a link
+
+    /^-tmpdir$/ && do { $Tmp_prefix = &grab_arg_arg(*Args,'-tmpdir', '');
+			$Tmp_prefix = "$Tmp_prefix/ghc$$";
+			$ENV{'TMPDIR'} = $Tmp_prefix; # for those who use it...
+			next arg; };
+    # use an alternate directory for temp files
+
+    #---------- redirect output --------------------------------------------
+
+    # -o <file>; applies to the last phase, whatever it is
+    # "-o -" sends it to stdout
+    # if <file> has a directory component, that dir must already exist
+
+    /^-odir$/	    && do { $Specific_output_dir = &grab_arg_arg(*Args,'-odir', '');
+			    #
+			    # Hack, of the worst sort: don't do validation of
+			    # odir argument if you're using -M (dependency generation).
+			    #
+			    if ( ! $Only_generate_deps && ! -d $Specific_output_dir) {
+				print STDERR "$Pgm: -odir: no such directory: $Specific_output_dir\n";
+				$Status++;
+			    }
+			    next arg; };
+
+    /^-o$/	    && do { $Specific_output_file = &grab_arg_arg(*Args,'-o', '');
+			    if ($Specific_output_file ne '-'
+			     && $Specific_output_file =~ /(.*)\/[^\/]*$/) {
+				local($dir_part) = $1;
+				if (! -d $dir_part) {
+				    print STDERR "$Pgm: no such directory: $dir_part\n";
+				    $Status++;
+				}
+			    }
+			    next arg; };
+
+    # NB: -isuf not documented yet (because it doesn't work yet)
+    /^-isuf$/	    && do { $Isuffix  = &grab_arg_arg(*Args,'-isuf', '');
+			    if ($Isuffix =~ /\./ ) {
+				print STDERR "$Pgm: -isuf suffix shouldn't contain a .\n";
+				$Status++;
+			    }
+			    next arg; };
+
+    /^-osuf$/	    && do { $Osuffix  = &grab_arg_arg(*Args,'-osuf', '');
+			    if ($Osuffix =~ /\./ ) {
+				print STDERR "$Pgm: -osuf suffix shouldn't contain a .\n";
+				$Status++;
+			    }
+			    next arg; };
+
+    # -ohi <file>; send the interface to <file>; "-ohi -" to send to stdout
+    /^-ohi$/	    && do { $Specific_hi_file = &grab_arg_arg(*Args,'-ohi', '');
+			    if ($Specific_hi_file ne '-'
+			     && $Specific_hi_file =~ /(.*)\/[^\/]*$/) {
+				local($dir_part) = $1;
+				if (! -d $dir_part) {
+				    print STDERR "$Pgm: no such directory: $dir_part\n";
+				    $Status++;
+				}
+			    }
+			    next arg; };
+
+    # The suffix to use when looking for interface files
+    /^-hisuf$/	    && do { $HiSuffix = &grab_arg_arg(*Args,'-hisuf', '');
+			    if ($HiSuffix =~ /\./ ) {
+				print STDERR "$Pgm: -hisuf suffix shouldn't contain a .\n";
+				$Status++;
+			    }
+			    next arg; };
+    # ToDo: remove, not a `normal' user thing to do (should be automatic)
+    /^-hisuf-prelude$/	    && do { $HiSuffix_prelude = &grab_arg_arg(*Args,'-hisuf-prelude', '');
+			    if ($HiSuffix =~ /\./ ) {
+				print STDERR "$Pgm: -hisuf-prelude suffix shouldn't contain a .\n";
+				$Status++;
+			    }
+			    next arg; };
+    /^-odump$/	    && do { $Specific_dump_file = &grab_arg_arg(*Args,'-odump', '');
+			    if ($Specific_dump_file =~ /(.*)\/[^\/]*$/) {
+				local($dir_part) = $1;
+				if (! -d $dir_part) {
+				    print STDERR "$Pgm: no such directory: $dir_part\n";
+				    $Status++;
+				}
+			    }
+			    next arg; };
+
+    #-------------- scc & Profiling Stuff ----------------------------------
+
+    /^-prof$/ && do { $PROFing = 'p'; next arg; }; # profiling -- details later!
+
+    /^-auto/ && do {
+		# generate auto SCCs on top level bindings
+		# -auto-all = all top level bindings
+		# -auto     = only top level exported bindings
+		$PROFauto = ( /-all/ )
+			    ? '-fauto-sccs-on-all-toplevs'
+			    : '-fauto-sccs-on-exported-toplevs';
+		next arg; };
+
+    /^-caf-all/ && do { # generate individual CAF SCC annotations
+		$PROFcaf = '-fauto-sccs-on-individual-cafs';
+		next arg; };
+
+    /^-ignore-scc$/ && do {
+	        # forces ignore of scc annotations even if profiling
+		$PROFignore_scc = '-W';
+		next arg; };
+
+    /^-G(.*)$/	&& do { push(@HsC_flags, "-G=$1");   # set group for cost centres
+			next arg; };
+
+    /^-unprof-scc-auto/ && do {
+		# generate auto SCCs on top level bindings when not profiling.
+		# Used to measure optimisation effects of presence of sccs.
+		$UNPROFscc_auto = ( /-all/ )
+			    ? '-fauto-sccs-on-all-toplevs'
+			    : '-fauto-sccs-on-exported-toplevs';
+		next arg; };
+
+    #--------- ticky/concurrent/parallel -----------------------------------
+    # we sort out the details a bit later on
+
+    /^-concurrent$/ && do { $CONCURing = 'c'; &add_syslib('concurrent'); next arg; }; 
+			  # concurrent Haskell; implies -syslib conc
+    /^-gransim$/    && do { $GRANing   = 'g'; next arg; }; # GranSim
+    /^-ticky$/	    && do { $TICKYing  = 't'; next arg; }; # ticky-ticky
+    /^-parallel$/   && do { $PARing    = 'p'; next arg; }; # parallel Haskell
+
+    #-------------- "user ways" --------------------------------------------
+
+    (/^-user-setup-([a-oA-Z])$/ ) && 
+           do {
+		/^-user-setup-([a-oA-Z])$/  && do { $BuildTag = "_$1"; };
+
+		local($stuff) = $UserSetupOpts{$BuildTag};
+		local(@opts)  = split(/\s+/, $stuff);
+		
+		# feed relevant ops into the arg-processing loop (if any)
+		unshift(@Args, @opts) if $#opts >= 0;
+
+		next arg; };
+
+    #---------- set search paths for libraries and things ------------------
+
+    # we do -i just like HBC (-i clears the list; -i<colon-separated-items>
+    # prepends the items to the list); -I is for including C .h files.
+
+    /^-i$/	    && do { @Import_dir = ();  # import path cleared!
+			    @SysImport_dir = ();
+			    print STDERR "WARNING: import paths cleared by `-i'\n";
+			    next arg; };
+
+    /^-i(.*)/	    && do { local(@new_items)
+			      = split( /:/, &grab_arg_arg(*Args,'-i', $1));
+			    unshift(@Import_dir, @new_items);
+			    next arg; };
+
+    /^-I(.*)/	    && do { push(@Include_dir,     &grab_arg_arg(*Args,'-I', $1)); next arg; };
+    /^-L(.*)/	    && do { push(@UserLibrary_dir, &grab_arg_arg(*Args,'-L', $1)); next arg; };
+    /^-l(.*)/	    && do { push(@UserLibrary,'-l'.&grab_arg_arg(*Args,'-l', $1)); next arg; };
+
+    /^-syslib(.*)/  && do { local($syslib) = &grab_arg_arg(*Args,'-syslib',$1);
+			    print STDERR "$Pgm: no such system library (-syslib): $syslib\n",
+			      $Status++ unless $syslib =~ /^(exts|misc|posix)$/;
+
+			    #
+			    # The posix library is a `special' in that it relies on
+			    # the ghc system library (packed strings). Wielding our
+			    # sledgehammer, the problem is solved by silently including
+			    # the ghc system library as well.
+			    # (ToDo: `nub' -syslib list)
+			    #
+			    &add_syslib($syslib);
+			    if ( $syslib eq 'posix' ) {
+				&add_syslib('misc');
+			    } elsif ( $syslib eq 'misc' && 
+				      $TargetName =~ /-solaris2$/ ) {
+				# needed for Berkeley socket/nwork stuff.
+				push(@SysLibrary, '-lnsl');
+			    }
+			    next arg; };
+
+    #=======================================================================
+    # various flags that we can harmlessly send to one program or another
+    # (we will later "reclaim" some of the compiler ones now sent to gcc)
+    #=======================================================================
+
+    #---------- this driver itself (ghc) -----------------------------------
+    # these change what executable is run for each phase:
+    /^-pgmL(.*)$/   && do { $Unlit      = $1; next arg; };
+    /^-pgmP(.*)$/   && do { $HsCpp      = $1; next arg; };
+    /^-pgmC(.*)$/   && do { $HsC        = $1; next arg; };
+    /^-pgmcO?(.*)$/ && do { $CcRegd     = $1; next arg; }; # the O? for back compat
+    /^-pgma(.*)$/   && do { $As         = $1; next arg; };
+    /^-pgml(.*)$/   && do { $Lnkr       = $1; next arg; };
+    /^-pgmdep(.*)$/ && do { $MkDependHS = $1; next arg; };
+
+    #---------- the get-anything-through opts (all pgms) -------------------
+    # these allow arbitrary option-strings to go to any phase:
+    /^-optL(.*)$/   && do { push(@Unlit_flags,      $1); next arg; };
+    /^-optP(.*)$/   && do { push(@HsCpp_flags,      $1); next arg; };
+    /^-optCrts(.*)$/&& do { push(@HsC_rts_flags,    $1); next arg; };
+    /^-optC(.*)$/   && do { push(@HsC_flags,        $1); next arg; };
+    /^-optp(.*)$/   && do { push(@HsP_flags,        $1); next arg; };
+    /^-optcpp(.*)$/ && do { push(@Cpp_define,       $1); $Only_preprocess_hc = ($1 eq "-E"); next arg; };
+    /^-optc(.*)$/   && do { push(@CcBoth_flags,     $1); next arg; };
+    /^-opta(.*)$/   && do { push(@As_flags,         $1); next arg; };
+    /^-optl(.*)$/   && do { push(@Ld_flags,         $1); next arg; };
+    /^-optdep(.*)$/ && do { push(@MkDependHS_flags, $1); next arg; };
+
+    #---------- Haskell C pre-processor (hscpp) ----------------------------
+    /^-D(.*)/	    && do { push(@HsCpp_flags, "'-D".&grab_arg_arg(*Args,'-D',$1)."'"); next arg; };
+    /^-U(.*)/	    && do { push(@HsCpp_flags, "'-U".&grab_arg_arg(*Args,'-U',$1)."'"); next arg; };
+
+    #---------- post-Haskell "assembler"------------------------------------
+    /^-ddump-raw-asm$/		  && do { $Dump_raw_asm	       = 1; next arg; };
+    /^-ddump-asm-splitting-info$/ && do { $Dump_asm_splitting_info = 1; next arg; };
+
+    #---------- Haskell compiler (hsc) -------------------------------------
+
+    /^-keep-hc-files?-too$/	&& do { $Keep_hc_file_too = 1; next arg; };
+    /^-keep-s-files?-too$/	&& do { $Keep_s_file_too = 1;  next arg; };
+
+    /^-fhaskell-1\.3$/		&& do { next arg; }; # a no-op right now
+
+    /^-fignore-interface-pragmas$/ && do { push(@HsC_flags, $_); next arg; };
+
+    /^-fno-implicit-prelude$/      && do { $NoImplicitPrelude= 1; push(@HsC_flags, $_); next arg; };
+     # don't do stack checking using page fault `trick'.
+     # (esoteric).
+    /^-fstack-check$/	           && do { $StkChkByPageFaultOK = 0; next arg; };
+     #
+     # have the compiler proper generate concurrent code,
+     # really only used when you want to configure your own
+     # special user compilation way. (Use -concurrent when
+     # compiling `Concurrent Haskell' programs).
+     #
+     # (ditto for -fgransim, fscc-profiling and -fticky-ticky)
+     #
+    /^-fconcurrent$/      && do { push(@HsC_flags,$_); next arg; };
+    /^-fscc-profiling$/   && do { push(@HsC_flags,$_); next arg; };
+    /^-fticky-ticky$/     && do { push(@HsC_flags,$_); next arg; };
+    /^-fgransim$/ 	  && do { push(@HsC_flags,$_); next arg; };
+
+    /^-split-objs/	&& do {
+			if ( $TargetPlatform !~ /^(alpha|hppa1\.1|i386|m68k|mips|powerpc|rs6000|sparc)-/ ) {
+			    $SplitObjFiles = 0;
+			    print STDERR "WARNING: don't know how to split objects on this platform: $TargetPlatform\n`-split-objs' option ignored\n";
+			} else {
+			    $SplitObjFiles = 1;
+    			    $HscOut = '-C=';
+
+			    push(@HsC_flags, "-fglobalise-toplev-names"); 
+			    push(@CcBoth_flags, '-DUSE_SPLIT_MARKERS');
+
+			    require('ghc-split.prl')
+			     || &tidy_up_and_die(1,"$Pgm: panic: can't load ghc-split.prl!\n");
+			}
+			next arg; };
+
+    /^-fglasgow-exts$/
+		&& do { push(@HsC_flags, $_);
+			push(@HsP_flags, '-N');
+
+#			push(@HsC_flags, '-fshow-import-specs');
+		
+			# -fglasgow-exts implies -syslib exts
+			&add_syslib('exts');
+
+			next arg; };
+
+    /^-fspeciali[sz]e-unboxed$/
+		&& do { $Oopt_DoSpecialise	= '-fspecialise';
+			$Oopt_SpecialiseUnboxed	= '-fspecialise-unboxed';
+			next arg; };
+    /^-fspeciali[sz]e$/
+		&& do { $Oopt_DoSpecialise = '-fspecialise'; next arg; };
+    /^-fno-speciali[sz]e$/
+		&& do { $Oopt_DoSpecialise = ''; next arg; };
+
+
+# Now the foldr/build options, which are *on* by default (for -O).
+
+    /^-ffoldr-build$/
+		    && do { $Oopt_FoldrBuild = 1; 
+			    $Oopt_FB_Support = '-fdo-arity-expand';
+			    #print "Yes F/B\n";
+			    next arg; };
+
+    /^-fno-foldr-build$/
+		    && do { $Oopt_FoldrBuild = 0; 
+			    $Oopt_FB_Support = ''; 
+			    next arg; };
+
+    /^-fno-foldr-build-rule$/
+		    && do { $Oopt_FoldrBuild = 0; 
+			    next arg; };
+
+    /^-fno-enable-tech$/
+		    && do { $Oopt_FB_Support = ''; 
+			    next arg; };
+
+    /^-fno-snapback-to-append$/
+		    && do { $Oopt_FoldrBuildInline .= ' -fdo-not-fold-back-append '; 
+			    next arg; };
+
+    # --------------- Renamer -------------
+
+
+    /^-fno-prune-tydecls$/     && do { push(@HsC_flags, $_); next arg; };
+    /^-fno-prune-instdecls$/     && do { push(@HsC_flags, $_); next arg; };
+
+    # ---------------
+
+    /^-fasm-(.*)$/  && do { $HscOut = '-S='; next arg; }; # force using nativeGen
+    /^-fvia-[cC]$/	    && do { $HscOut = '-C='; next arg; }; # force using C compiler
+
+    # ---------------
+
+    /^-funfolding-.*$/
+		    && do { push(@HsC_flags, $_); next arg };
+
+    /^(-fmax-simplifier-iterations)(.*)$/
+		    && do { $Oopt_MaxSimplifierIterations = $1 . &grab_arg_arg(*Args,$1, $2);
+			    next arg; };
+    /^(-fshow-simplifier-progress)/
+		    && do { $Oopt_ShowSimplifierProgress = $1;
+			    next arg; };
+
+    /^-fno-pedantic-bottoms$/
+		    && do { $Oopt_PedanticBottoms = ''; next arg; };
+
+    /^-fdo-monad-eta-expansion$/
+		    && do { $Oopt_MonadEtaExpansion = $_; next arg; };
+
+    /^-fno-let-from-(case|app|strict-let)$/ # experimental, really (WDP 95/10)
+		    && do { push(@HsC_flags, $_); next arg; };
+
+    /^(-freturn-in-regs-threshold)(.*)$/
+		    && do { local($what) = $1;
+			    local($num)  = &grab_arg_arg(*Args,$what, $2);
+			    if ($num < 2 || $num > 8) {
+				die "Bad experimental flag: $_\n";
+			    } else {
+				$HscOut = '-C='; # force using C compiler
+				push(@HsC_flags, "$what$num");
+				push(@CcRegd_flags, "-D__STG_REGS_AVAIL__=$num");
+			    }
+			    next arg; };
+
+    # --------------- Warnings etc. ------
+
+    /^-fshow-import-specs/
+		    && do { push(@HsC_flags, $_); next arg; };
+
+    /^-fsignatures-required/      
+    		    && do { push(@HsC_flags, $_); next arg; };
+
+    /^-fwarn-(.*)$/      && do { push(@HsC_flags, $_); next arg; };
+
+    /^-fno-(.*)$/   && do { push(@HsC_antiflags, "-f$1");
+			    &squashHscFlag("-f$1");
+			    next arg; };
+
+    /^-W$/	    && do { push(@HsC_flags, @MinusWOpts); next arg; };
+    /^-Wall$/	    && do { push(@HsC_flags, @MinusWallOpts); next arg; };
+    /^(-Wnot|w)$/   && do { foreach (@Hsc_flags) {
+				/^-fwarn-(.*)$/ && do { $_=''; };
+			    };
+			    push(@HsC_antiflags, @StandardWarnings);
+			    next arg; };
+
+    # --------------- platform specific flags (for gcc mostly) ----------------
+
+    /^-mlong-calls$/ && do { # for GCC for HP-PA boxes,
+                             # for 2.6.x..?, does not apply for 2.7.2
+			     # any longer.
+			    unshift(@CcBoth_flags, ( $_ ));
+			    next arg; };
+
+    /^-m(v8|sparclite|cypress|supersparc|cpu=(cypress|supersparc))$/
+		     && do { # for GCC for SPARCs
+			    unshift(@CcBoth_flags, ( $_ ));
+			    next arg; };
+
+    /^-monly-([432])-regs/ && do { # for iX86 boxes only; no effect otherwise
+			    $StolenX86Regs = $1;
+			    next arg; };
+
+    #*************** ... and lots of debugging ones (form: -d* )
+
+    # -d(no-)core-lint is done this way so it is turn-off-able.
+    /^-dcore-lint/       && do { $CoreLint = '-dcore-lint'; next arg; };
+    /^-dno-core-lint/    && do { $CoreLint = '';    	    next arg; };
+    # Ditto for STG lint
+    /^-dstg-lint/       && do { $StgLint = '-dstg-lint'; next arg; };
+    /^-dno-stg-lint/    && do { $StgLint = '';           next arg; };
+
+    /^-d(dump|ppr)-/         && do { push(@HsC_flags, $_); next arg; };
+    /^-dverbose-(simpl|stg)/ && do { push(@HsC_flags, $_); next arg; };
+    /^-dshow-passes/	     && do { push(@HsC_flags, $_); next arg; };
+    /^-dshow-rn-stats/	     && do { push(@HsC_flags, $_); next arg; };
+    /^-dshow-rn-trace/	     && do { push(@HsC_flags, $_); next arg; };
+    /^-dsource-stats/        && do { push(@HsC_flags, $_); next arg; };
+    /^-dsimplifier-stats/    && do { push(@HsC_flags, $_); next arg; };
+    /^-dstg-stats/	     && do { $Oopt_StgStats = $_; next arg; };
+
+    #*************** ... and now all these -R* ones for its runtime system...
+
+    /^-Rscale-sizes?(.*)/ && do {
+    	$Scale_sizes_by = &grab_arg_arg(*Args,'-Rscale-sizes', $1);
+	next arg; };
+
+    /^(-H|-Rmax-heapsize)(.*)/ && do {
+    	local($heap_size) = &grab_arg_arg(*Args,$1, $2);
+    	if ($heap_size =~ /(\d+)[Kk]$/) {
+	    $heap_size = $1 * 1000;
+	} elsif ($heap_size =~ /(\d+)[Mm]$/) {
+	    $heap_size = $1 * 1000 * 1000;
+	} elsif ($heap_size =~ /(\d+)[Gg]$/) {
+	    $heap_size = $1 * 1000 * 1000 * 1000;
+	}
+	if ($heap_size <= 0) {
+	    print STDERR "$Pgm: resetting heap-size to zero!!! $heap_size\n";
+	    $Specific_heap_size = 0;
+	
+	# if several heap sizes given, take the largest...
+	} elsif ($heap_size >= $Specific_heap_size) {
+	    $Specific_heap_size = $heap_size;
+	} else {
+	    print STDERR "$Pgm: ignoring heap-size-setting option ($_)...not the largest seen\n";
+	}
+	next arg; };
+
+    /^(-K|Rmax-(stk|stack)size)(.*)/ && do {
+        local($flag) = $1;
+    	local($stk_size) = &grab_arg_arg(*Args,'-Rmax-stksize', $3);
+    	if ($stk_size =~ /(\d+)[Kk]$/) {
+	    $stk_size = $1 * 1000;
+	} elsif ($stk_size =~ /(\d+)[Mm]$/) {
+	    $stk_size = $1 * 1000 * 1000;
+	} elsif ($stk_size =~ /(\d+)[Gg]$/) {
+	    $stk_size = $1 * 1000 * 1000 * 1000;
+	}
+	if ($stk_size <= 0) {
+	    print STDERR "$Pgm: resetting stack-size to zero!!! $stk_size\n";
+	    $Specific_stk_size = 0;
+
+	# if several stack sizes given, take the largest...
+	} elsif ($stk_size >= $Specific_stk_size) {
+	    $Specific_stk_size = $stk_size;
+	} else {
+	    print STDERR "$Pgm: ignoring stack-size-setting option ($flag $stk_size)...not the largest seen\n";
+	}
+	next arg; };
+
+    /^-Rgc-stats$/ && do {  $CollectingGCstats++;
+			    # the two RTSs do this diff ways; we will try to compensate
+			    next arg; };
+
+    /^-Rghc-timing/ && do { $CollectGhcTimings = 1; next arg; };
+
+    #---------- C high-level assembler (gcc) -------------------------------
+    /^-(Wall|ansi|pedantic)$/ && do { push(@CcBoth_flags, $_); next arg; };
+
+    # -dgcc-lint is a useful way of making GCC very fussy.
+    # From alan@spri.levels.unisa.edu.au (Alan Modra).
+    /^-dgcc-lint$/ && do { push(@CcBoth_flags, '-Wall -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wnested-externs'); next arg; };
+    # An alternate set, from mark@sgcs.com (Mark W. Snitily)
+    # -Wall -Wstrict-prototypes -Wmissing-prototypes -Wcast-align -Wshadow
+
+    # inject "#include <wurble>" into the compiler's C output!
+
+    /^-#include(.*)/	&& do {
+	local($to_include) = &grab_arg_arg(*Args,'-#include', $1);
+	push(@CcInjects, "#include $to_include\n");
+	next arg; };
+
+    #---------- Linker (gcc, really) ---------------------------------------
+
+    /^-static$/		&& do { push(@Ld_flags, $_); next arg; };
+
+    #---------- mixed cc and linker magic ----------------------------------
+    # this optimisation stuff is finally sorted out later on...
+
+    /^-O2-for-C$/ && do { $MinusO2ForC = 1; next arg; };
+
+    /^-O[1-2]?$/ && do {
+		local($opt_lev) = ( /^-O2$/ ) ? 2 : 1; # max 'em
+		$OptLevel = ( $opt_lev > $OptLevel ) ? $opt_lev : $OptLevel;
+
+		$HscOut = '-C=' if $OptLevel == 2; # force use of C compiler
+		next arg; };
+
+    /^-Onot$/	&& do { $OptLevel = 0; next arg; }; # # set it to <no opt>
+
+    /^-Ofile(.*)/ && do {
+		$OptLevel = 3;
+		local($ofile) = &grab_arg_arg(*Args,'-Ofile', $1);
+		@HsC_minusO3_flags = ();
+
+		open(OFILE, "< $ofile") || die "Can't open $ofile!\n";
+		while (<OFILE>) {
+		    chop;
+		    s/\#.*//;	    # death to comments
+		    s/[ \t]+//g;    # death to whitespace
+		    next if /^$/;   # ditto, blank lines
+		    s/([()*{}])/\\$1/g;    # protect shell metacharacters
+		    if ( /^C:(.*)/ ) {
+			push(@CcBoth_flags, $1);
+		    } else {
+			push(@HsC_minusO3_flags, $_);
+		    }
+		}
+		close(OFILE);
+		next arg; };
+
+    /^-debug$/	&& do { # all this does is mark a .hc/.o as "debugging"
+			# in the consistency info
+			$DEBUGging = 'd';
+			next arg; };
+
+    #---------- linking .a file --------------------------------------------
+
+    /^-Main(.*)/ && do {
+		# specifies main or mainPrimIO to be linked
+		$Ld_main = $1;
+		next arg; }; 
+
+    #---------- catch unrecognized flags -----------------------------------
+
+    /^-./ && do {
+	print STDERR "$Pgm: unrecognised option: $_\n";
+	$Status++;
+	next arg; };
+
+}
+
+} # end of processArgs
+
+\end{code}

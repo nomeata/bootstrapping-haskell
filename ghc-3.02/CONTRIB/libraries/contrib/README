@@ -1,0 +1,95 @@
+Haskell Library -- README file
+------------------------------
+
+These are suffixes used (besides the usual .shar/.tar.Z/etc.):
+
+    .(l)hs	(literate) Haskell source
+    .(l)gs	(literate) Gofer source
+
+What's here:
+
+avl-tree.lgs		An AVL tree; a balanced tree with O(ln n)
+avl-tree-map.lgs	insertion time.  A Map and Set based on same.
+avl-tree-set.lgs	Author: Stephen J. Bevan <bevan@cs.man.ac.uk>
+
+FiveTree.lhs		A data structure devised as a substitute for
+			"real" arrays. Author: Sandra Foubister
+			<sandra@minster.york.ac.uk>
+
+lit-code-conv.l?[gh]s	Convert a conventional file to a literate
+			script and vice versa.  Both Haskell and Gofer
+			versions.  Author: Stephen J. Bevan
+			<bevan@cs.man.ac.uk>
+
+LLDecompMethod.{hs,ps}	"The file LLDecompMethod.hs contains the code
+			of another Choleski factorization as well as
+			the code of carrying forward and backward
+			substitution.  The file LLDecompMethod.ps is a
+			postscript file (2 pages) briefly describing
+			the algorithm and the code as well as an
+			example."  Author: Junxian J Liu
+			<jjl@doc.imperial.ac.uk>.
+
+
+mkhprog-2.2.shar	Generates a skeletal Haskell program that parses
+			command-line arguments.  Author: N D North
+			<ndn@seg.npl.co.uk>.
+
+QSort.hs		Sort function based on quicksort.
+			Author: Lennart Augustsson <augustss@cs.chalmers.se>.
+
+rb-tree.lgs		A Red/Black Tree.  This is a balanced tree
+			with O(ln n) insertion.
+			Author: Stephen J. Bevan <bevan@cs.man.ac.uk>
+
+Random.hs		(Good) random number generator.
+			Submitted by: Lennart Augustsson
+			<augustss@cs.chalmers.se>.
+
+SetMap.hs		Sets and maps in Haskell.
+			Author: Nick North <ndn@seg.npl.co.uk>
+
+shortest-path.lhs	A simple shortest-path algorithm.  Author:
+			Paul Sanders <psanders@srd.bt.co.uk>.
+
+translate.lhs		Defines `translate', a function that converts
+			one string to another.  This is modelled on
+			`tr' in Unix and `map' in Icon.
+			Author: Stephen J. Bevan <bevan@cs.man.ac.uk>
+
+examples/FlipFlop.gs	Naive simulation of an RS flip-flop.
+			Author: sava.mintchev@cs.man.ac.uk
+
+examples/KnightsTour.README	Example program taking the knight's tour
+    	/KnightsTour.tar.Z	in Haskell.  Author: Jonathan Hill
+				<hilly@dcs.qmw.ac.uk>.
+
+The following are copied from Stephen Bevan's <bevan@cs.man.ac.uk>
+functional-language archive (as are some of the above); most are to do
+numerical things (obviously).  The file INDEX.bevan-archive is an
+index of what's in that archive:
+
+Adams_Bashforth_Approx.hs
+Adams_Predictor_Corrector_Approx.hs
+Bisection_Approx.hs
+Choleski_Factorization.hs
+Crout_Reduction.hs
+Fixed_Point_Approx.hs
+Gauss_Seidel_Iteration.hs
+Horner.hs
+Huet_Knuth_Bendix.hs
+Jacobi_Iteration.hs
+Least_Squares_Fit.hs
+Matrix_Ops.hs
+Maybe.hs
+Neville_Iterated_Interpolation.hs
+Newton_Cotes.hs
+Newton_Interpolatory_Divided_Difference.hs
+Newton_Raphson_Approx.hs
+Runge_Kutta_Approx.hs
+SOR_Iteration.hs
+Secant_Approx.hs
+Sort.hs
+Steffensen_Approx.hs
+Taylor_Approx.hs
+Vector_Ops.hs
