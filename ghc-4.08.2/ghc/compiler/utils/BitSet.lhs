@@ -33,6 +33,7 @@ import
 {-hide import from mkdependHS-}
 import
 	Word
+import Data.Bits
 #endif
 
 #ifdef __GLASGOW_HASKELL__
@@ -149,10 +150,10 @@ mkBS :: [Int] -> BitSet
 mkBS xs = foldr (unionBS . unitBS) emptyBS xs
 
 unitBS :: Int -> BitSet
-unitBS x = MkBS (1 `bitLsh` x)
+unitBS x = MkBS (1 `shiftL` x)
 
 unionBS :: BitSet -> BitSet -> BitSet
-unionBS (MkBS x) (MkBS y) = MkBS (x `bitOr` y)
+unionBS (MkBS x) (MkBS y) = MkBS (x .|. y)
 
 #if 0
 -- not used in GHC
@@ -173,20 +174,23 @@ elementBS x (MkBS s)
 #endif
 
 minusBS :: BitSet -> BitSet -> BitSet
-minusBS (MkBS x) (MkBS y) = MkBS (x `bitAnd` (bitCompl y))
+minusBS (MkBS x) (MkBS y) = MkBS (x .&. (complement y))
 
 listBS :: BitSet -> [Int]
 listBS (MkBS s) = listify s 0
     where listify s n =
     	    case s of
     	        0 -> []
-    	        _ -> let s' = s `bitRsh` 1
+    	        _ -> let s' = s `shiftR` 1
     	    	         more = listify s' (n + 1)
-    	    	     in case (s `bitAnd` 1) of
+    	    	     in case (s .&. 1) of
     	    	    	    0 -> more
     	    	    	    _ -> n : more
 
 #endif
+
+intBS :: BitSet -> Int
+intBS = error "TODO: intBS"
 
 \end{code}
 

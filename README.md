@@ -82,6 +82,18 @@ Summary of some relevant facts:
 
  * The RTS system of GHC 4.08 can be built using GCC 2.95
 
+## What have we done here
+
+See `./joachims-experiments.sh`
+
+Hacks:
+
+* Use `happy`, despite it not being bootstrapped
+
+* Patched hugs to accept # in identifiers
+
+* Patched `BitSet.lhs` (see vendore directory)
+
 ## Next steps?
 
 Here are some possible next steps:
@@ -112,7 +124,6 @@ Here are some possible next steps:
 
    - if these tools can be run using Hugs
    - if the output can be interpreted by Hugs, and if not, if they have a hugs-compatible mode
-
 
 ## How to help?
 

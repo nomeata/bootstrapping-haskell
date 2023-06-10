@@ -15,7 +15,7 @@
         inherit hugs;
       };
       devShells.default = pkgs.mkShell {
-        packages = [ pkgs.hugs pkgs.happy ];
+        packages = [ hugs pkgs.happy ];
       };
     });
 }

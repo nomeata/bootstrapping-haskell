@@ -141,6 +141,7 @@ Void initCharTab() {			/* Initialize char decode table    */
     setChars(SYMBOL,    ":!#$%&*+./<=>?@\\^|-~");
 
     setChar (IDAFTER,   '\'');		/* Characters in identifier	   */
+    setChar (IDAFTER,   '#');
     setCopy (IDAFTER,   (DIGIT|SMALL|LARGE));
 
     setChar (SPACE,     ' ');		/* ASCII space character	   */
