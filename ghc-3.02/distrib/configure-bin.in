@@ -1,0 +1,128 @@
+dnl
+dnl Binary distribution configure script
+dnl
+#!/bin/sh
+#
+
+# Is it there?
+AC_INIT(Makefile.in)
+
+exeext=''
+
+#
+# First off, what system are we running under?
+#
+AC_CANONICAL_SYSTEM
+
+dnl ** canonicalize platform names
+# Canonicali[sz]e the platform name
+TargetPlatform=`/bin/sh $srcdir/config.sub $target` || exit 1
+
+#
+# The following will be more difficult when we *are* cross-compiling.
+# Suitable names to slam in *_CPP are in platform.h.in.
+# We also record the architecture, vendor, and operating system (OS)
+# separately.
+case $TargetPlatform in
+alpha-dec-osf[[12]]*)
+	TargetPlatform=alpha-dec-osf1;;
+alpha-dec-osf[[34]]*)
+	TargetPlatform=alpha-dec-osf3;;
+hppa1.1-hp-hpux*)
+	TargetPlatform=hppa1.1-hp-hpux;;
+i[[3456]]86-*-linuxaout*)
+	TargetPlatform=i386-unknown-linuxaout;;
+i[[3456]]86-*-linux*)
+	TargetPlatform=i386-unknown-linux;;
+i[[3456]]86-*-freebsd*)
+	TargetPlatform=i386-unknown-freebsd;;
+i[[3456]]86-*-netbsd*)
+	TargetPlatform=i386-unknown-netbsd;;
+i[[3456]]86-*-solaris2*)
+	TargetPlatform=i386-unknown-solaris2;;
+i[[3456]]86-*-cygwin32*)
+	exeext='.exe'
+	TargetPlatform=i386-unknown-cygwin32;;
+m68k-next-nextstep2)
+	TargetPlatform=m68k-next-nextstep2;;
+m68k-next-nextstep3)
+	TargetPlatform=m68k-next-nextstep3;;
+i[[3456]]86-next-nextstep3)
+	TargetPlatform=i386-next-nextstep3;;
+m68k-sun-sunos4*)
+	TargetPlatform=m68k-sun-sunos4;;
+mips-dec-ultrix*)
+        TargetPlaformP=mips-dec-ultrix;;
+mips-sgi-irix*)
+	TargetPlatform=mips-sgi-irix;;
+powerpc-ibm-aix*)
+	TargetPlatform=powerpc-ibm-aix;;
+rs6000-ibm-aix*)
+	TargetPlatform=rs6000-ibm-aix;;
+sparc-sun-sunos4*)
+	TargetPlatform=sparc-sun-sunos4;;
+sparc-sun-solaris2*)
+	TargetPlatform=sparc-sun-solaris2;;
+*)
+        echo "Unrecognised platform: $TargetPlatform"
+        exit 1
+        ;;
+esac
+echo "Which we'll further canonicalise into: $TargetPlatform"
+
+AC_SUBST(TargetPlatform)
+AC_SUBST(exeext)
+
+AC_CHECK_PROG(PerlCmd,perl,$ac_dir/$ac_word)
+if test -z "$PerlCmd"; then
+    echo "You must install perl before you can continue"
+    echo "Perhaps it is already installed, but not in your PATH?"
+    echo ""
+    echo "Continuing, assuming perl will be available as: perl"
+fi
+#
+dnl ** does #!.../perl work? (sometimes it's too long...)
+echo "checking if \`#!$PerlCmd' works in shell scripts"
+echo "#!$PerlCmd"'
+exit $1;
+' > conftest
+chmod u+x conftest
+(SHELL=/bin/sh; export SHELL; ./conftest 69 > /dev/null)
+if test $? -ne 69; then
+   echo "It does!"
+else
+   echo "It doesn't!  Perhaps \`#!$PerlCmd' is too long (often 32 characters max).."
+fi
+rm -f conftest
+
+#
+dnl ** figure out how to do a BSD-ish install **
+#
+AC_PROG_INSTALL
+
+#
+dnl ** how to do symlinks **
+#
+AC_PROG_LN_S()
+
+#
+dnl ** Find the path to sed **
+#
+AC_PATH_PROG(SedCmd,sed)
+
+#
+dnl ** How to invoke cpp directly **
+#
+AC_PROG_CC
+AC_HAVE_GCC
+AC_PROG_CPP
+AC_PROG_GNUCPP
+
+#
+AC_OUTPUT(Makefile)
+
+echo "****************************************************"
+echo "Configuration done, ready to either 'make install'"
+echo "or 'make in-place', followed by 'make install-docs'."
+echo "(see README and INSTALL files for more info.)"
+echo "****************************************************"

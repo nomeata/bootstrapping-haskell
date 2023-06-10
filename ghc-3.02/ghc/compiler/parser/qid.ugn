@@ -1,0 +1,18 @@
+%{
+#include "hspincl.h"
+%}
+%{{
+module U_qid where
+
+#include "HsVersions.h"
+
+import UgenUtil
+%}}
+type qid;
+	noqual	: < gnoqual 	: stringId; >;
+	aqual	: < gqualmod  	: stringId;
+		    gqualname 	: stringId; >;
+	gid	: < ggid	: long;
+		    gidname     : stringId; >;
+end;
+

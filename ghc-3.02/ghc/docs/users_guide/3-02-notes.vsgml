@@ -1,0 +1,43 @@
+<sect1>Release notes for version~3-02---4/97
+<label id="release-3-02">
+<p>
+
+Changes made since 3.01:
+
+<itemize>
+
+<item> CharLike and IntLike closures fixed (should reduce allocation
+slightly).
+
+<item> Pattern binding desugaring improved to eliminate intermediate
+tuples in some cases.
+
+<item> Fixed parsing problem: declaring a record with an infix constructor.
+
+<item> When computing the Makefile dependencies, using either
+<tt/ghc -M/ (preferred) or by invoking the <tt/mkdependHS/ script
+directly, <tt/CPP/ will now by default not be run over the input
+files. To have CPP wash your input files, use the command-line option
+<tt/-cpp/.
+
+<item> Added a working specialiser.
+
+<item> Added <tt/unsafeCoerce#/.
+
+<item> Fixed compilation of real floating-point literals: they were
+previously generated as applications of <tt/fromRational/, even when
+not overloaded.
+
+<item> The object splitter had a bug in it that increased binary sizes
+significantly on i386-unknown-linux and sparc-sun-solaris2.  Now
+fixed.
+
+<item> Bump some of the constants that affect unfolding agression:
+performance is now better than 2.10, and binary sizes are smaller.
+
+<item> Add NOINLINE pragma, and use it for unsafePerformIO and
+friends.  Remove PrelUnsafe and PrelUnsafeST, move the contents into
+PrelIOBase and PrelST respectively.  Add NOINLINE pragma to
+LazyST.runST.
+
+</itemize>

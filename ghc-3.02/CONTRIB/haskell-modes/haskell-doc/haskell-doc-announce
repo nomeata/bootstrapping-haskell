@@ -1,0 +1,145 @@
+Return-Path: hwloidl@dcs.gla.ac.uk 
+Return-Path: <hwloidl@dcs.gla.ac.uk>
+Delivery-Date: Mon, 3 Nov 1997 02:26:06 +0000
+Received: from karkar by vanuata with SMTP (MMTA);
+          Mon, 3 Nov 1997 02:26:03 +0000
+To: glasgow-haskell-users@dcs.gla.ac.uk
+Cc: gnu-emacs-sources@prep.ai.mit.edu, hwloidl@dcs.gla.ac.uk
+Subject: haskell-doc.el --- show function types in echo area
+X-Subject-Morse-Code: ..../.-/.../-.-/./.-../.-../-....-/-../---/-.-./.-.-.-/./.-.. 
+                      -....-/-....-/-....- .../..../---/.-- 
+                      ..-./..-/-./-.-./-/../---/-. -/-.--/.--././... ../-. 
+                      ./-.-./..../--- .-/.-././.-
+X-Url: http://www.dcs.gla.ac.uk/~hwloidl
+X-Year: 
+X-Stardate: [-30]0190.28
+X-Prime-Number-of-the-Day: 61331
+X-Mailer: MH 6.7 via mh-e 1.17 under Emacs 20.2.1.
+X-Emacs-Acronym: Everyday Material Almost Compiled Successfully
+Date: Mon, 03 Nov 97 02:25:53 +0000
+From: Hans Wolfgang Loidl <hwloidl@dcs.gla.ac.uk>
+X-Mts: smtp
+
+Fellow Haskell Hackers,
+
+This is the first official release of haskell-doc, an emacs mode that
+allows you to look-up the type of a Haskell function by doing nothing for
+at least 0.5 seconds. It is implemented as an emacs minor mode, so if you
+don't believe in emacs, please ignore this email (and mercy to your soul :-) 
+
+Personally, I hate to leaf through reference manuals just to look for the
+type of a prelude function for the Haskell version of the day. Having it
+online as web page or info file is better, but you still have to leave your
+current buffer. When using haskell-doc a kind-of "emacs demon process" is
+installed that regularly checks the Haskell id under the cursor and, if it
+is a function, displays the type in the echo area. You can turn the mode on
+or off by using CTRL-c CTRL-o if you use one of the supported haskell modes.
+For more details check the `Features' section.
+
+Downloading:
+============
+
+You can get the elisp code from:
+ /ftp@ftp.dcs.gla.ac.uk:/pub/glasgow-fp/authors/Hans_Loidl/Elisp/haskell-doc.el
+or if you prefer URLs
+ ftp://ftp.dcs.gla.ac.uk/pub/glasgow-fp/authors/Hans_Loidl/Elisp/haskell-doc.el
+
+The page is also reachable via my homepage http://www.dcs.gla.ac.uk/~hwloidl
+
+Installation:
+=============
+
+Put the file into a directory on your load-path, byte compile it and then
+put the following into your .emacs file:
+
+  (autoload 'turn-on-haskell-doc-mode "haskell-doc" nil t)
+
+and depending on the major mode you use for your Haskell programs:
+  (add-hook 'hugs-mode-hook 'turn-on-haskell-doc-mode)    ; hugs-mode
+or
+  (add-hook 'haskell-mode-hook 'turn-on-haskell-doc-mode) ; haskell-mode
+
+If you do not use a special haskell mode, you can still use haskell-doc. 
+In this case you have to type 
+  M-x turn-on-haskell-doc-mode
+to enable it.
+
+Features:
+=========
+
+haskell-doc distinguishes between several different kinds of Haskell ids
+and shows information depending on this kind:
+ prelude fcts, library fcts ... show the type
+ local fcts  ... show the type; must be given a type starting in column 0;
+		 this uses the `imenu' package and therefore just works 
+		 in `hugs-mode' for the moment -- sorry Graeme
+ global fcts ... show the type; there's only rudimentary support for this;
+                 it loads all imported modules into emacs buffers and uses
+		 the `imenu' information to look-up types (again, hugs-mode
+		 only)
+ strategy fcts and types ... show the type; strategies are our technique
+			     for parallel Haskell programming; if you're
+			     not interested in that you can safely turn it off
+ Haskell keywords ... show a short summary of its syntax
+ user defined ids ... you can specify an association list of ids and 
+		      related documentation e.g.:
+			(setq haskell-doc-show-user-defined t)
+			(setq haskell-doc-user-defined-ids 
+			  (list 
+			    '("main" . "just another pathetic main function")
+                            '("foo" . "a very dummy name")
+                            '("bar" . "another dummy name")))
+
+Currently, only Haskell 1.4 is supported. 
+
+If you use haskell-doc with hugs-mode you'll also get a sub-menu in the
+`Hugs' menubar item for turning individual features on or off.
+
+In both hugs- and haskell-mode [mouse-3] is bound to an elisp fct that
+looks-up the type of the Haskell function under the mouse.
+
+Compatibility:
+==============
+
+haskell-doc 1.3 is known to work under Emacs 19.34, Emacs 20.2 and XEmacs
+19.15.  It should work with older Emacs versions, too, but I'm not sure how
+far back in time you can go. Let me know if you encounter problems.
+
+haskell-doc has been tested with hugs-mode 0.7 and haskell-mode 0.102.
+Note that hugs-mode needs a few changes to run under Emacs 20.2. You have to
+download hugs-mode 0.7 from the same dir as haskell-doc to run haskell-doc
+under Emacs 20.2.
+
+I haven't tested haskell-doc with all other haskell-modes out there. If you
+have problems combining it with your pet mode, please let me know.
+
+Bugs:
+=====
+
+If you heavily switch between buffers the demon process sometimes seems to
+de-install itself (despite still showing haskell-doc in the mode line).
+If this happens check if haskell-doc is active by pressing ESC-/
+If it is not, activate it again by pressing CTRL-u CTRL-c CTRL-o
+
+If you find any bugs, want to report compatibilty problems, send praises or
+whatever, either use the haskell-doc-submit-bug-report function (part of
+the haskell-doc menu) or send it directly to:
+	      Hans-Wolfgang Loidl <hwloidl@dcs.glasgow.ac.uk>
+
+Finally, I figure this mode should be most useful to people just starting
+to learn Haskell, who are probably not on this mailing list. So, by all
+means, feel free to distribute it to people interested in using it!
+
+Have fun!
+-- 
+  Hans Wolfgang
+
+==============================
+"I hate prototypes." 
+		-- O'Brien , "Apocalypse Rising"
+
+-----BEGIN GEEK CODE BLOCK-----
+Version: 3.1
+GCS d+ s:-- a- C+++ US++>+++ P+++ L++>++++ E+++ W++(--) N+ o? K? w--- O@ M-
+V- PS+ PE? Y+ PGP+>++ t+++>++++ 5++ X+ R@ tv-(+) b+ DI? D+ G++>+++ e+++ h* y?
+------END GEEK CODE BLOCK------

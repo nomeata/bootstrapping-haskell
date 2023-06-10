@@ -1,0 +1,253 @@
+#
+# @configure_input@
+#
+# Instructions for configuring an fptools package.
+#
+# There are two ways you can get started with an fptools package, either
+# by using the unpacked distribution tree in-situ or by installing the
+# package.
+#
+# Using the package directly is easy, just do `make in-place'. (The
+# distribution will *not* work straight out of the box, you'll have to do
+# this first)
+#
+# To install the package, you'll have to set one or more of the
+# following variables:
+#
+#  * bindir 
+#     path to directory of where you want the executables
+#     to be installed.
+#  * libdir
+#     where you want the library archives to go.
+#     Note, if you specify /usr/foo/lib for libdir,
+#     the library files for your fptools package will be
+#     installed in  /usr/foo/lib/<package>-<version>, e.g.,
+#     /usr/foo/lib/ghc-3.00. If you don't want the package/version
+#     directory appended, you'll have to modify $(real_libdir)
+#     below.
+#
+#  * datadir
+#     path to where the platform-independent files will go.
+#     As for libdir, the effective path for the platform-indep
+#     stuff is $(datadir)/<package>-<version>. If you want
+#     complete control, see $(real_datadir)
+#
+#  * platform 
+#     the platform you're installing for. The configure script
+#     makes an educated guess, so you'll only have to set this
+#     if it clashes with your reality, I guess.
+#
+#  * htmldir
+#     where to install the documentation HTML files.
+#  * dvidir
+#     where to install the DVI files.
+#  * infodir
+#     where to install the Emacs info files
+#
+# Installing the documentation is not done as part of the `install' rule, but
+# via `install-docs' (or if you want to be selective: `install-html', `install-dvi'
+# and `install-info').
+#
+# For more complete instructions, consult the INSTALL file
+# that came with the bundle, and/or consult the installation
+# documentation in one of the document directories.
+#
+# Please report any bugs, problems etc. with installing and using this bundle
+# Makefile setup to glasgow-haskell-bugs@dcs.gla.ac.uk
+# 
+
+# Where the different pieces of the bundle should go:
+bindir      = @bindir@
+libdir      = @libdir@
+datadir     = @datadir@
+
+platform    = @TargetPlatform@
+prefix      = @prefix@
+exec_prefix = @exec_prefix@
+
+# default
+infodir   = $(datadir)
+htmldir   = $(datadir)
+dvidir    = $(datadir)
+
+#
+# Putting the package stuff in package-specific
+# directories:
+#
+real_libdir      = $(libdir)/$(package)-$(version)
+real_datadir     = $(datadir)/$(package)-$(version)
+
+PERL        = @PerlCmd@
+SH	    = /bin/sh
+RM          = rm -f
+MV          = mv
+CP          = cp
+LN_S        = @LN_S@
+CHMOD       = chmod
+INSTALL	    = @INSTALL@
+exeext      = @exeext@
+RAWCPP      = @RAWCPP@
+SED	    = @SedCmd@
+TMPDIR      = /tmp
+
+# sigh
+INSTALL_DIR  = ./mkdirhier
+
+#
+# Set of package scripts for which you'd like a name-<version> symlink
+# to be created, i.e., create a symlink, ghc-$(version), pointing to ghc to
+# avoid version vertigo.
+#
+VERSION_SYMLINKS_FOR=$(package)
+
+# Binaries to install
+PACKAGE_BIN_INSTALL=$(PACKAGE_PRL_SCRIPTS) $(PACKAGE_SH_SCRIPTS) $(PACKAGE_BINS)
+
+#----------end of user-serviceable parts------------
+#
+#
+# How to install the different pieces
+# 
+INSTALL_BIN  = $(INSTALL) $(INSTALL_BIN_OPTS)
+INSTALL_LIB  = $(INSTALL) $(INSTALL_LIB_OPTS)
+INSTALL_DATA = $(INSTALL) $(INSTALL_DATA_OPTS)
+
+# What's common to all installs
+INSTALL_OPTS= $(EXTRA_INSTALL_OPTS)
+
+BIN_PERMS = 755
+LIB_PERMS = 644
+
+INSTALL_BIN_OPTS  = -m $(BIN_PERMS) $(INSTALL_OPTS) $(EXTRA_INSTALL_BIN_OPTS)
+INSTALL_LIB_OPTS  = -m $(LIB_PERMS) $(INSTALL_OPTS) $(EXTRA_INSTALL_LIB_OPTS)
+INSTALL_DATA_OPTS = -m $(LIB_PERMS) $(INSTALL_OPTS) $(EXTRA_INSTALL_DATA_OPTS)
+
+.PHONY: in-place config-pkgs mk-version-symlinks install-dirs install
+
+config-pkgs ::
+	@echo "Configuring $(package), version $(version), on $(platform) ..."
+	@for i in $(PACKAGE_PRL_SCRIPTS) ""; do \
+	  if test "$$i"; then \
+	   echo "Creating a configured version of $$i .."; \
+	   $(RM) bin/$(platform)/$(package)-$(version)/$$i.bak; \
+	   if [ -f bin/$(platform)/$(package)-$(version)/$$i ]; then $(MV) bin/$(platform)/$(package)-$(version)/$$i bin/$(platform)/$(package)-$(version)/$$i.bak; fi; \
+	   echo "#! $(PERL)"  		        		> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"bindir='$(bindir)';"                        >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"libdir='$(real_libdir)';"                   >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"libexecdir='$(real_libdir)';"               >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"datadir='$(real_datadir)';"                 >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"SED='$(SED)';"		>> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"RAWCPP='$(RAWCPP)';"		>> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"TMPDIR='$(TMPDIR)';"		>> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   cat bin/$(platform)/$(package)-$(version)/$$i.prl   >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   $(CHMOD) $(BIN_PERMS) bin/$(platform)/$(package)-$(version)/$$i; \
+	   echo "Done."; \
+	  fi; \
+	done
+	@for i in $(PACKAGE_LIB_PRL_SCRIPTS) ""; do \
+	  if test "$$i"; then \
+	   echo "Creating a configured version of $$i .."; \
+	   $(RM) lib/$(platform)/$(package)-$(version)/$$i.bak; \
+	   if [ -f lib/$(platform)/$(package)-$(version)/$$i ]; then $(MV) lib/$(platform)/$(package)-$(version)/$$i lib/$(platform)/$(package)-$(version)/$$i.bak; fi; \
+	   echo "#! $(PERL)"                      > lib/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"bindir='$(bindir)';"          >> lib/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"libdir='$(real_libdir)';"     >> lib/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"libexecdir='$(real_libdir)';" >> lib/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"datadir='$(real_datadir)';"   >> lib/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"SED='$(SED)';"		 >> lib/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"RAWCPP='$(RAWCPP)';"		 >> lib/$(platform)/$(package)-$(version)/$$i ; \
+	   echo '$$'"TMPDIR='$(TMPDIR)';"		 >> lib/$(platform)/$(package)-$(version)/$$i ; \
+	   cat lib/$(platform)/$(package)-$(version)/$$i.prl >> lib/$(platform)/$(package)-$(version)/$$i; \
+	   $(CHMOD) $(BIN_PERMS) lib/$(platform)/$(package)-$(version)/$$i; \
+	   echo "Done."; \
+	  fi; \
+	done
+	@for i in $(PACKAGE_SH_SCRIPTS) ""; do \
+	  if test "$$i"; then \
+	   echo "Creating a configured version of $$i .."; \
+	   $(RM) bin/$(platform)/$(package)-$(version)/$$i.bak; \
+	   if [ -f bin/$(platform)/$(package)-$(version)/$$i ]; then $(MV) bin/$(platform)/$(package)-$(version)/$$i bin/$(platform)/$(package)-$(version)/$$i.bak; fi; \
+	   echo "#! $(SH)"                      > bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo "bindir='$(bindir)'"          >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo "libdir='$(real_libdir)'"     >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo "libexecdir='$(real_libdir)'" >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo "datadir='$(real_datadir)'"   >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo "SED='$(SED)'"			 >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo "RAWCPP='$(RAWCPP)'"		 >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   echo "TMPDIR='$(TMPDIR)'"		 >> bin/$(platform)/$(package)-$(version)/$$i ; \
+	   cat bin/$(platform)/$(package)-$(version)/$$i.sh >> bin/$(platform)/$(package)-$(version)/$$i; \
+	   $(CHMOD) $(BIN_PERMS) bin/$(platform)/$(package)-$(version)/$$i; \
+	   echo "Done."; \
+	  fi; \
+	done
+
+# Convert pwd's UNC reported path into DOS style
+# (cygwin32 only.)
+CURRENT_DIR = $(shell pwd | sed 's|^//\(.\)|\1:|' )
+
+in-place ::
+	$(MAKE) $(MFLAGS) config-pkgs bindir=$(CURRENT_DIR)/bin/$(platform)/$(package)-$(version) libdir=$(CURRENT_DIR)/lib/$(platform) datadir=$(CURRENT_DIR)/share/$(package)-$(version)
+	@echo "Finished configuring..to use, add $(CURRENT_DIR)/bin/$(platform)/$(package)-$(version) to your PATH."
+
+install-dirs ::
+	$(INSTALL_DIR) $(bindir)
+	(cd lib/$(platform)/$(package)-$(version); find . -type d -exec sh -c '../../../$(INSTALL_DIR) $$0 $(real_libdir)/$$0' {} \; )
+	(cd share/$(package)-$(version); find . -type d -exec sh -c '../../$(INSTALL_DIR) $(real_datadir)/$$0' {} \; )
+
+install :: config-pkgs install-dirs install-bin install-libs install-datas
+
+.PHONY: install-bin install-libs install-datas
+
+install-bin:
+	for i in $(PACKAGE_BIN_INSTALL); do \
+	   $(INSTALL_BIN) bin/$(platform)/$(package)-$(version)/$$i $(bindir); \
+	done;
+	for i in $(VERSION_SYMLINKS_FOR) ""; do \
+	   if [ "x$$i" != "x" ]; then 		\
+	   	( cd $(bindir); 		\
+		  $(RM) $$i;			\
+		  $(LN_S) $$i-$(version) $$i	\
+		); 				\
+	   fi; 					\
+	done
+
+
+install-libs:
+	(cd lib/$(platform)/$(package)-$(version); find . -type f -exec sh -c '$(CP) $$0 $(real_libdir)/$$0' {} \; )
+
+install-datas:
+	(cd share/$(package)-$(version); find . -type f -exec sh -c '$(INSTALL_DATA) $$0 $(real_datadir)/$$0' {} \; )
+
+show-install-setup:
+	@echo "Install setup..."
+	@echo "bindir  = $(bindir)"
+	@echo "libdir  = $(libdir) (real_libdir  = $(real_libdir))"
+	@echo "datadir = $(datadir) (real_datadir = $(real_datadir))"
+
+#
+# Documentation targets, install-docs for the whole lot, or
+# install-{dvi,html,info}
+#
+
+.PHONY: show-install-setup install-docs install-html install-info install-dirs-dvi install-dirs-html install-dirs-info
+
+install-docs : install-html install-dvi install-info
+
+install-dvi: install-dirs-dvi
+	$(INSTALL_DATA) dvi/$(package)-$(version)/* $(dvidir)
+
+install-info: install-dirs-info
+	$(INSTALL_DATA) info/$(package)-$(version)/* $(infodir)
+
+install-html: install-dirs-html
+	$(INSTALL_DATA) html/$(package)-$(version)/* $(htmldir)
+
+install-dirs-html:
+	$(INSTALL_DIR) $(htmldir) 
+
+install-dirs-info:
+	$(INSTALL_DIR) $(infodir) 
+
+install-dirs-dvi:
+	$(INSTALL_DIR) $(dvidir) 
+

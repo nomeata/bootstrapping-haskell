@@ -1,0 +1,1054 @@
+% 
+% $Id: libraries.vsgml,v 1.1 1998/01/30 17:02:32 simonm Exp $
+%
+% GHC Prelude and Libraries.
+%
+
+<sect>The GHC prelude and libraries
+<label id="ghc-prelude">
+<p>
+
+This document describes GHC's prelude and libraries.  The basic story is that of
+the Haskell 1.4 Report and Libraries document (which we do not reproduce here),
+but this document describes in addition:
+
+<itemize>
+
+<item>  GHC's additional non-standard libraries and types, such as
+        state transformers, packed strings, foreign objects, stable
+	pointers, and so on.
+
+<item>  GHC's primitive types and operations.  The standard Haskell
+        functions are implemented on top of these, and it is sometimes
+	useful to use them directly.
+
+<item>  The organisation of these libraries into directories.
+
+<item> Short description of programmer interface to the non-standard
+       libraries provided in addition to the standard prelude.
+</itemize>
+
+A number of the libraries that provide access to GHC's language
+extensions are shared by Hugs, and are described in the <htmlurl
+name="GHC/Hugs Extension Libraries" url="libs.html"> document.
+
+<sect1>Prelude extensions
+<label id="ghc-prelude-exts">
+<p>
+
+GHC's prelude contains the following non-standard extensions:
+
+<descrip>
+
+<tag>@fromInt@ method in class @Num@:</tag> It's there.  Converts from
+an @Int@ to the type.
+
+<tag>@toInt@ method in class @Integral@:</tag> Converts from type type
+to an @Int@.
+
+</descrip>
+
+GHC also internally uses a number of modules that begin with the
+string @Prel@: for this reason, we don't recommend that you use any
+module names beginning with @Prel@ in your own programs.  The @Prel@
+modules are always available: in fact, you can get access to several
+extensions this way (for some you might need to give the
+@-fglasgow-exts@<nidx>-fglasgow-exts option</nidx> flag).
+
+<sect1>The module @PrelGHC@: really primitive stuff
+<label id="ghc-libs-ghc">
+<p>
+
+This section defines all the types which are primitive in Glasgow
+Haskell, and the operations provided for them.
+
+A primitive type is one which cannot be defined in Haskell, and which
+is therefore built into the language and compiler.  Primitive types
+are always unboxed; that is, a value of primitive type cannot be
+bottom.
+
+Primitive values are often represented by a simple bit-pattern, such
+as @Int#@, @Float#@, @Double#@.  But this is not necessarily the case:
+a primitive value might be represented by a pointer to a
+heap-allocated object.  Examples include @Array#@, the type of
+primitive arrays.  You might think this odd: doesn't being
+heap-allocated mean that it has a box?  No, it does not.  A primitive
+array is heap-allocated because it is too big a value to fit in a
+register, and would be too expensive to copy around; in a sense, it is
+accidental that it is represented by a pointer.  If a pointer
+represents a primitive value, then it really does point to that value:
+no unevaluated thunks, no indirections...nothing can be at the other
+end of the pointer than the primitive value.
+
+This section also describes a few non-primitive types, which are needed 
+to express the result types of some primitive operations.
+
+<sect2>Character and numeric types
+<p>
+<nidx>character types, primitive</nidx>
+<nidx>numeric types, primitive</nidx>
+<nidx>integer types, primitive</nidx>
+<nidx>floating point types, primitive</nidx>
+
+There are the following obvious primitive types:
+
+<tscreen><verb>
+type Char#
+type Int#	-- see also Word# and Addr#, later
+type Float#
+type Double#
+</verb></tscreen>
+<ncdx>Char#</ncdx>
+<ncdx>Int#</ncdx>
+<ncdx>Float#</ncdx>
+<ncdx>Double#</ncdx>
+
+If you really want to know their exact equivalents in C, see
+@ghc/includes/StgTypes.lh@ in the GHC source tree.
+
+Literals for these types may be written as follows:
+
+<tscreen><verb>
+1#		an Int#
+1.2#		a Float#
+1.34##		a Double#
+'a'#		a Char#; for weird characters, use '\o<octal>'#
+"a"#		an Addr# (a `char *')
+</verb></tscreen>
+<nidx>literals, primitive</nidx>
+<nidx>constants, primitive</nidx>
+<nidx>numbers, primitive</nidx>
+
+<sect2> Comparison operations
+<p>
+<nidx>comparisons, primitive</nidx>
+<nidx>operators, comparison</nidx>
+
+<tscreen><verb>
+{>,>=,==,/=,<,<=}# :: Int# -> Int# -> Bool
+
+{gt,ge,eq,ne,lt,le}Char# :: Char# -> Char# -> Bool
+    -- ditto for Word# and Addr#
+</verb></tscreen>
+<ncdx>>#</ncdx>
+<ncdx>>=#</ncdx>
+<ncdx>==#</ncdx>
+<ncdx>/=#</ncdx>
+<ncdx><#</ncdx>
+<ncdx><=#</ncdx>
+<ncdx>gt{Char,Word,Addr}#</ncdx>
+<ncdx>ge{Char,Word,Addr}#</ncdx>
+<ncdx>eq{Char,Word,Addr}#</ncdx>
+<ncdx>ne{Char,Word,Addr}#</ncdx>
+<ncdx>lt{Char,Word,Addr}#</ncdx>
+<ncdx>le{Char,Word,Addr}#</ncdx>
+
+<sect2> Primitive-character operations
+<p>
+<nidx>characters, primitive</nidx>
+<nidx>operators, primitive character</nidx>
+
+<tscreen><verb>
+ord# :: Char# -> Int#
+chr# :: Int# -> Char#
+</verb></tscreen>
+<ncdx>ord#</ncdx>
+<ncdx>chr#</ncdx>
+
+
+<sect2> Primitive-@Int@ operations
+<p>
+<nidx>integers, primitive</nidx>
+<nidx>operators, primitive integer</nidx>
+
+<tscreen><verb>
+{+,-,*,quotInt,remInt}# :: Int# -> Int# -> Int#
+negateInt# :: Int# -> Int#
+
+iShiftL#, iShiftRA#, iShiftRL# :: Int# -> Int# -> Int#
+	-- shift left, right arithmetic, right logical
+</verb></tscreen>
+<ncdx>+#</ncdx>
+<ncdx>-#</ncdx>
+<ncdx>*#</ncdx>
+<ncdx>quotInt#</ncdx>
+<ncdx>remInt#</ncdx>
+<ncdx>iShiftL#</ncdx>
+<ncdx>iShiftRA#</ncdx>
+<ncdx>iShiftRL#</ncdx>
+<nidx>shift operations, integer</nidx>
+
+<bf>Note:</bf> No error/overflow checking!
+
+<sect2> Primitive-@Double@ and @Float@ operations
+<p>
+<nidx>floating point numbers, primitive</nidx>
+<nidx>operators, primitive floating point</nidx>
+
+<tscreen><verb>
+{+,-,*,/}##         :: Double# -> Double# -> Double#
+{<,<=,==,/=,>=,>}## :: Double# -> Double# -> Bool
+negateDouble#       :: Double# -> Double#
+double2Int#	    :: Double# -> Int#
+int2Double#	    :: Int#    -> Double#
+
+{plus,minux,times,divide}Float# :: Float# -> Float# -> Float#
+{gt,ge,eq,ne,lt,le}Float# :: Float# -> Float# -> Bool
+negateFloat#        :: Float# -> Float#
+float2Int#	    :: Float# -> Int#
+int2Float#	    :: Int#   -> Float#
+</verb></tscreen>
+
+<ncdx>+##</ncdx>
+<ncdx>-##</ncdx>
+<ncdx>*##</ncdx>
+<ncdx>/##</ncdx>
+<ncdx><##</ncdx>
+<ncdx><=##</ncdx>
+<ncdx>==##</ncdx>
+<ncdx>=/##</ncdx>
+<ncdx>>=##</ncdx>
+<ncdx>>##</ncdx>
+<ncdx>negateDouble#</ncdx>
+<ncdx>double2Int#</ncdx>
+<ncdx>int2Double#</ncdx>
+
+<ncdx>plusFloat#</ncdx>
+<ncdx>minusFloat#</ncdx>
+<ncdx>timesFloat#</ncdx>
+<ncdx>divideFloat#</ncdx>
+<ncdx>gtFloat#</ncdx>
+<ncdx>geFloat#</ncdx>
+<ncdx>eqFloat#</ncdx>
+<ncdx>neFloat#</ncdx>
+<ncdx>ltFloat#</ncdx>
+<ncdx>leFloat#</ncdx>
+<ncdx>negateFloat#</ncdx>
+<ncdx>float2Int#</ncdx>
+<ncdx>int2Float#</ncdx>
+
+And a full complement of trigonometric functions:
+
+<tscreen> <verb>
+expDouble#	:: Double# -> Double#
+logDouble#	:: Double# -> Double#
+sqrtDouble#	:: Double# -> Double#
+sinDouble#	:: Double# -> Double#
+cosDouble#	:: Double# -> Double#
+tanDouble#	:: Double# -> Double#
+asinDouble#	:: Double# -> Double#
+acosDouble#	:: Double# -> Double#
+atanDouble#	:: Double# -> Double#
+sinhDouble#	:: Double# -> Double#
+coshDouble#	:: Double# -> Double#
+tanhDouble#	:: Double# -> Double#
+powerDouble#	:: Double# -> Double# -> Double#
+</verb></tscreen>
+<nidx>trigonometric functions, primitive</nidx>
+
+similarly for @Float#@.
+
+There are two coercion functions for @Float#@/@Double#@:
+
+<tscreen><verb>
+float2Double#	:: Float# -> Double#
+double2Float#	:: Double# -> Float#
+</verb></tscreen>
+<ncdx>float2Double#</ncdx>
+<ncdx>double2Float#</ncdx>
+
+The primitive versions of @encodeDouble@/@decodeDouble@:
+
+<tscreen><verb>
+encodeDouble#	:: Int# -> Int# -> ByteArray#	-- Integer mantissa
+		-> Int#				-- Int exponent
+		-> Double#
+
+decodeDouble#	:: Double# -> PrelNum.ReturnIntAndGMP
+</verb></tscreen>
+<ncdx>encodeDouble#</ncdx>
+<ncdx>decodeDouble#</ncdx>
+
+(And the same for @Float#@s.)
+
+<sect2>Operations on/for @Integers@ (interface to GMP)
+<label id="horrid-Integer-pairing-types">
+<p>
+<nidx>arbitrary precision integers</nidx>
+<nidx>Integer, operations on</nidx>
+
+We implement @Integers@ (arbitrary-precision integers) using the GNU
+multiple-precision (GMP) package (version 1.3.2).
+
+<bf>Note:</bf> some of this might change when we upgrade to using
+GMP~2.x.
+
+The data type for @Integer@ must mirror that for @MP_INT@ in @gmp.h@
+(see @gmp.info@ in @ghc/includes/runtime/gmp@).  It comes out as:
+
+<tscreen><verb>
+data Integer = J# Int# Int# ByteArray#
+</verb></tscreen>
+<nidx>Integer type</nidx>
+
+So, @Integer@ is really just a ``pairing'' type for a particular
+collection of primitive types.
+
+The operations in the GMP return other combinations of
+GMP-plus-something, so we need ``pairing'' types for those, too:
+
+<tscreen><verb>
+data Return2GMPs     = Return2GMPs Int# Int# ByteArray# Int# Int# ByteArray#
+data ReturnIntAndGMP = ReturnIntAndGMP Int# Int# Int# ByteArray#
+
+-- ????? something to return a string of bytes (in the heap?)
+</verb></tscreen>
+<ncdx>Return2GMPs</ncdx>
+<ncdx>ReturnIntAndGMP</ncdx>
+
+The primitive ops to support @Integers@ use the ``pieces'' of the
+representation, and are as follows:
+
+<tscreen><verb>
+negateInteger#	:: Int# -> Int# -> ByteArray# -> Integer
+
+{plus,minus,times}Integer# :: Int# -> Int# -> ByteArray#
+			   -> Int# -> Int# -> ByteArray#
+			   -> Integer
+
+cmpInteger# :: Int# -> Int# -> ByteArray#
+	    -> Int# -> Int# -> ByteArray#
+	    -> Int# -- -1 for <; 0 for ==; +1 for >
+
+divModInteger#, quotRemInteger#
+	:: Int# -> Int# -> ByteArray#
+	-> Int# -> Int# -> ByteArray#
+	-> PrelNum.Return2GMPs
+
+integer2Int# :: Int# -> Int# -> ByteArray# -> Int# 
+
+int2Integer#  :: Int#  -> Integer -- NB: no error-checking on these two!
+word2Integer# :: Word# -> Integer
+
+addr2Integer# :: Addr# -> Integer
+	-- the Addr# is taken to be a `char *' string
+	-- to be converted into an Integer.
+</verb></tscreen>
+<ncdx>negateInteger#</ncdx>
+<ncdx>plusInteger#</ncdx>
+<ncdx>minusInteger#</ncdx>
+<ncdx>timesInteger#</ncdx>
+<ncdx>cmpInteger#</ncdx>
+<ncdx>divModInteger#</ncdx>
+<ncdx>quotRemInteger#</ncdx>
+<ncdx>integer2Int#</ncdx>
+<ncdx>int2Integer#</ncdx>
+<ncdx>word2Integer#</ncdx>
+<ncdx>addr2Integer#</ncdx>
+
+<sect2>Words and addresses
+<p>
+<nidx>word, primitive type</nidx>
+<nidx>address, primitive type</nidx>
+<nidx>unsigned integer, primitive type</nidx>
+<nidx>pointer, primitive type</nidx>
+
+A @Word#@ is used for bit-twiddling operations.  It is the same size as
+an @Int#@, but has no sign nor any arithmetic operations.
+<tscreen><verb>
+type Word#	-- Same size/etc as Int# but *unsigned*
+type Addr#	-- A pointer from outside the "Haskell world" (from C, probably);
+		-- described under "arrays"
+
+</verb></tscreen>
+<ncdx>Word#</ncdx>
+<ncdx>Addr#</ncdx>
+
+@Word#@s and @Addr#@s have the usual comparison operations.
+Other unboxed-@Word@ ops (bit-twiddling and coercions):
+
+<tscreen><verb>
+and#, or#, xor# :: Word# -> Word# -> Word#
+	-- standard bit ops.
+
+quotWord#, remWord# :: Word# -> Word# -> Word#
+	-- word (i.e. unsigned) versions are different from int
+	-- versions, so we have to provide these explicitly.
+
+not# :: Word# -> Word#
+
+shiftL#, shiftRA#, shiftRL# :: Word# -> Int# -> Word#
+	-- shift left, right arithmetic, right logical
+
+int2Word#	:: Int#  -> Word# -- just a cast, really
+word2Int#	:: Word# -> Int#
+</verb></tscreen>
+<nidx>bit operations, Word and Addr</nidx>
+<ncdx>and#</ncdx>
+<ncdx>or#</ncdx>
+<ncdx>xor#</ncdx>
+<ncdx>not#</ncdx>
+<ncdx>quotWord#</ncdx>
+<ncdx>remWord#</ncdx>
+<ncdx>shiftL#</ncdx>
+<ncdx>shiftRA#</ncdx>
+<ncdx>shiftRL#</ncdx>
+<ncdx>int2Word#</ncdx>
+<ncdx>word2Int#</ncdx>
+
+Unboxed-@Addr@ ops (C casts, really):
+<tscreen><verb>
+int2Addr#	:: Int#  -> Addr#
+addr2Int#	:: Addr# -> Int#
+</verb></tscreen>
+<ncdx>int2Addr#</ncdx>
+<ncdx>addr2Int#</ncdx>
+
+The casts between @Int#@, @Word#@ and @Addr#@ correspond to null
+operations at the machine level, but are required to keep the Haskell
+type checker happy.
+
+Operations for indexing off of C pointers (@Addr#@s) to snatch values
+are listed under ``arrays''.
+
+<sect2>Arrays
+<p>
+<nidx>arrays, primitive</nidx>
+
+The type @Array# elt@ is the type of primitive, unpointed arrays of
+values of type @elt@.
+
+<tscreen><verb>
+type Array# elt
+</verb></tscreen>
+<ncdx>Array#</ncdx>
+
+@Array#@ is more primitive than a Haskell array --- indeed, the
+Haskell @Array@ interface is implemented using @Array#@ --- in that an
+@Array#@ is indexed only by @Int#@s, starting at zero.  It is also
+more primitive by virtue of being unboxed.  That doesn't mean that it
+isn't a heap-allocated object - of course, it is.  Rather, being
+unboxed means that it is represented by a pointer to the array itself,
+and not to a thunk which will evaluate to the array (or to bottom).
+The components of an @Array#@ are themselves boxed.
+
+The type @ByteArray#@ is similar to @Array#@, except that it contains
+just a string of (non-pointer) bytes.
+
+<tscreen><verb>
+type ByteArray#
+</verb></tscreen>
+<ncdx>ByteArray#</ncdx>
+
+Arrays of these types are useful when a Haskell program wishes to
+construct a value to pass to a C procedure. It is also possible to
+use them to build (say) arrays of unboxed characters for internal use
+in a Haskell program.  Given these uses, @ByteArray#@ is deliberately
+a bit vague about the type of its components.  Operations are provided
+to extract values of type @Char#@, @Int#@, @Float#@, @Double#@, and
+@Addr#@ from arbitrary offsets within a @ByteArray#@.  (For type
+@Foo#@, the $i$th offset gets you the $i$th @Foo#@, not the @Foo#@ at
+byte-position $i$.  Mumble.)  (If you want a @Word#@, grab an @Int#@,
+then coerce it.)
+
+Lastly, we have static byte-arrays, of type @Addr#@ [mentioned
+previously].  (Remember the duality between arrays and pointers in C.)
+Arrays of this types are represented by a pointer to an array in the
+world outside Haskell, so this pointer is not followed by the garbage
+collector.  In other respects they are just like @ByteArray#@.  They
+are only needed in order to pass values from C to Haskell.
+
+<sect2>Reading and writing
+<p>
+
+Primitive arrays are linear, and indexed starting at zero.
+
+The size and indices of a @ByteArray#@, @Addr#@, and
+@MutableByteArray#@ are all in bytes.  It's up to the program to
+calculate the correct byte offset from the start of the array.  This
+allows a @ByteArray#@ to contain a mixture of values of different
+type, which is often needed when preparing data for and unpicking
+results from C.  (Umm... not true of indices... WDP 95/09)
+
+<em>Should we provide some @sizeOfDouble#@ constants?</em>
+
+Out-of-range errors on indexing should be caught by the code which
+uses the primitive operation; the primitive operations themselves do
+<em>not</em> check for out-of-range indexes. The intention is that the
+primitive ops compile to one machine instruction or thereabouts.
+
+We use the terms ``reading'' and ``writing'' to refer to accessing
+<em>mutable</em> arrays (see Section~<ref name="Mutable arrays" id="sect:mutable">), and
+``indexing'' to refer to reading a value from an <em>immutable</em>
+array.
+
+Immutable byte arrays are straightforward to index (all indices in bytes):
+<tscreen><verb>
+indexCharArray#   :: ByteArray# -> Int# -> Char#
+indexIntArray#    :: ByteArray# -> Int# -> Int#
+indexAddrArray#   :: ByteArray# -> Int# -> Addr#
+indexFloatArray#  :: ByteArray# -> Int# -> Float#
+indexDoubleArray# :: ByteArray# -> Int# -> Double#
+
+indexCharOffAddr#   :: Addr# -> Int# -> Char#
+indexIntOffAddr#    :: Addr# -> Int# -> Int#
+indexFloatOffAddr#  :: Addr# -> Int# -> Float#
+indexDoubleOffAddr# :: Addr# -> Int# -> Double#
+indexAddrOffAddr#   :: Addr# -> Int# -> Addr#	
+ -- Get an Addr# from an Addr# offset
+</verb></tscreen>
+<ncdx>indexCharArray#</ncdx>
+<ncdx>indexIntArray#</ncdx>
+<ncdx>indexAddrArray#</ncdx>
+<ncdx>indexFloatArray#</ncdx>
+<ncdx>indexDoubleArray#</ncdx>
+<ncdx>indexCharOffAddr#</ncdx>
+<ncdx>indexIntOffAddr#</ncdx>
+<ncdx>indexFloatOffAddr#</ncdx>
+<ncdx>indexDoubleOffAddr#</ncdx>
+<ncdx>indexAddrOffAddr#</ncdx>
+
+The last of these, @indexAddrOffAddr#@, extracts an @Addr#@ using an offset
+from another @Addr#@, thereby providing the ability to follow a chain of
+C pointers.
+
+Something a bit more interesting goes on when indexing arrays of boxed
+objects, because the result is simply the boxed object. So presumably
+it should be entered --- we never usually return an unevaluated
+object!  This is a pain: primitive ops aren't supposed to do
+complicated things like enter objects.  The current solution is to
+return a lifted value, but I don't like it!
+
+<tscreen><verb>
+indexArray#       :: Array# elt -> Int# -> PrelBase.Lift elt  -- Yuk!
+</verb></tscreen>
+<ncdx>indexArray#</ncdx>
+
+
+<sect2>The state type
+<p>
+<ncdx>state, primitive type</ncdx>
+<ncdx>State#</ncdx>
+
+The primitive type @State#@ represents the state of a state
+transformer.  It is parameterised on the desired type of state, which
+serves to keep states from distinct threads distinct from one another.
+But the <em>only</em> effect of this parameterisation is in the type
+system: all values of type @State#@ are represented in the same way.
+Indeed, they are all represented by nothing at all!  The code
+generator ``knows'' to generate no code, and allocate no registers
+etc, for primitive states.
+
+<tscreen><verb>
+type State# s
+</verb></tscreen>
+
+The type @GHC.RealWorld@ is truly opaque: there are no values defined
+of this type, and no operations over it.  It is ``primitive'' in that
+sense - but it is <em>not unboxed!</em> Its only role in life is to be
+the type which distinguishes the @IO@ state transformer.
+
+<tscreen><verb>
+data RealWorld
+</verb></tscreen>
+
+<sect2>State of the world
+<p>
+
+A single, primitive, value of type @State# RealWorld@ is provided.
+
+<tscreen><verb>
+realWorld# :: State# GHC.RealWorld
+</verb></tscreen>
+<nidx>realWorld# state object</nidx>
+
+(Note: in the compiler, not a @PrimOp@; just a mucho magic
+@Id@. Exported from @GHC@, though).
+
+<sect2>State pairing types
+<p>
+<label id="horrid-pairing-types">
+
+This subsection defines some types which, while they aren't quite
+primitive because we can define them in Haskell, are very nearly so.
+They define constructors which pair a primitive state with a value of
+each primitive type.  They are required to express the result type of
+the primitive operations in the state monad.
+<tscreen><verb>
+data StateAndPtr#    s elt = StateAndPtr#    (State# s) elt 
+
+data StateAndChar#   s     = StateAndChar#   (State# s) Char# 
+data StateAndInt#    s     = StateAndInt#    (State# s) Int# 
+data StateAndWord#   s     = StateAndWord#   (State# s) Word#
+data StateAndFloat#  s     = StateAndFloat#  (State# s) Float# 
+data StateAndDouble# s     = StateAndDouble# (State# s) Double#  
+data StateAndAddr#   s     = StateAndAddr#   (State# s) Addr#
+
+data StateAndStablePtr# s a = StateAndStablePtr#  (State# s) (StablePtr# a)
+data StateAndForeignObj# s  = StateAndForeignObj# (State# s) ForeignObj#
+data StateAndSynchVar#  s a = StateAndSynchVar#  (State# s) (SynchVar# a)
+
+data StateAndArray#            s elt = StateAndArray#        (State# s) (Array# elt) 
+data StateAndMutableArray#     s elt = StateAndMutableArray# (State# s) (MutableArray# s elt)  
+data StateAndByteArray#        s = StateAndByteArray#        (State# s) ByteArray# 
+data StateAndMutableByteArray# s = StateAndMutableByteArray# (State# s) (MutableByteArray# s)
+</verb></tscreen>
+
+Hideous.
+
+<sect2>Mutable arrays
+<p>
+<label id="sect:mutable">
+<nidx>mutable arrays</nidx>
+<nidx>arrays, mutable</nidx>
+
+Corresponding to @Array#@ and @ByteArray#@, we have the types of
+mutable versions of each.  In each case, the representation is a
+pointer to a suitable block of (mutable) heap-allocated storage.
+
+<tscreen><verb>
+type MutableArray# s elt
+type MutableByteArray# s
+</verb></tscreen>
+<ncdx>MutableArray#</ncdx>
+<ncdx>MutableByteArray#</ncdx>
+
+<sect3>Allocation
+<p>
+<nidx>mutable arrays, allocation</nidx>
+<nidx>arrays, allocation</nidx>
+<nidx>allocation, of mutable arrays</nidx>
+
+Mutable arrays can be allocated. Only pointer-arrays are initialised;
+arrays of non-pointers are filled in by ``user code'' rather than by
+the array-allocation primitive.  Reason: only the pointer case has to
+worry about GC striking with a partly-initialised array.
+
+<tscreen><verb>
+newArray#       :: Int# -> elt -> State# s -> StateAndMutableArray# s elt 
+
+newCharArray#   :: Int# -> State# s -> StateAndMutableByteArray# s 
+newIntArray#    :: Int# -> State# s -> StateAndMutableByteArray# s 
+newAddrArray#   :: Int# -> State# s -> StateAndMutableByteArray# s 
+newFloatArray#  :: Int# -> State# s -> StateAndMutableByteArray# s 
+newDoubleArray# :: Int# -> State# s -> StateAndMutableByteArray# s 
+</verb></tscreen>
+<ncdx>newArray#</ncdx>
+<ncdx>newCharArray#</ncdx>
+<ncdx>newIntArray#</ncdx>
+<ncdx>newAddrArray#</ncdx>
+<ncdx>newFloatArray#</ncdx>
+<ncdx>newDoubleArray#</ncdx>
+
+The size of a @ByteArray#@ is given in bytes.
+
+<sect3>Reading and writing
+<p>
+<nidx>arrays, reading and writing</nidx>
+
+<tscreen><verb>
+readArray#       :: MutableArray# s elt -> Int# -> State# s -> StateAndPtr#    s elt
+readCharArray#   :: MutableByteArray# s -> Int# -> State# s -> StateAndChar#   s
+readIntArray#    :: MutableByteArray# s -> Int# -> State# s -> StateAndInt#    s
+readAddrArray#	 :: MutableByteArray# s -> Int# -> State# s -> StateAndAddr#   s 
+readFloatArray#  :: MutableByteArray# s -> Int# -> State# s -> StateAndFloat#  s 
+readDoubleArray# :: MutableByteArray# s -> Int# -> State# s -> StateAndDouble# s 
+
+writeArray#       :: MutableArray# s elt -> Int# -> elt     -> State# s -> State# s 
+writeCharArray#   :: MutableByteArray# s -> Int# -> Char#   -> State# s -> State# s 
+writeIntArray#    :: MutableByteArray# s -> Int# -> Int#    -> State# s -> State# s 
+writeAddrArray#   :: MutableByteArray# s -> Int# -> Addr#   -> State# s -> State# s 
+writeFloatArray#  :: MutableByteArray# s -> Int# -> Float#  -> State# s -> State# s 
+writeDoubleArray# :: MutableByteArray# s -> Int# -> Double# -> State# s -> State# s 
+</verb></tscreen>
+<ncdx>readArray#</ncdx>
+<ncdx>readCharArray#</ncdx>
+<ncdx>readIntArray#</ncdx>
+<ncdx>readAddrArray#</ncdx>
+<ncdx>readFloatArray#</ncdx>
+<ncdx>readDoubleArray#</ncdx>
+<ncdx>writeArray#</ncdx>
+<ncdx>writeCharArray#</ncdx>
+<ncdx>writeIntArray#</ncdx>
+<ncdx>writeAddrArray#</ncdx>
+<ncdx>writeFloatArray#</ncdx>
+<ncdx>writeDoubleArray#</ncdx>
+
+
+<sect3>Equality
+<p>
+<nidx>arrays, testing for equality</nidx>
+
+One can take ``equality'' of mutable arrays.  What is compared is the
+<em>name</em> or reference to the mutable array, not its contents.
+
+<tscreen><verb>
+sameMutableArray#     :: MutableArray# s elt -> MutableArray# s elt -> Bool
+sameMutableByteArray# :: MutableByteArray# s -> MutableByteArray# s -> Bool
+</verb></tscreen>
+<ncdx>sameMutableArray#</ncdx>
+<ncdx>sameMutableByteArray#</ncdx>
+
+<sect3>Freezing mutable arrays
+<p>
+<nidx>arrays, freezing mutable</nidx>
+<nidx>freezing mutable arrays</nidx>
+<nidx>mutable arrays, freezing</nidx>
+
+Only unsafe-freeze has a primitive.  (Safe freeze is done directly in Haskell 
+by copying the array and then using @unsafeFreeze@.) 
+
+<tscreen><verb>
+unsafeFreezeArray#     :: MutableArray# s elt -> State# s -> StateAndArray#     s elt
+unsafeFreezeByteArray# :: MutableByteArray# s -> State# s -> StateAndByteArray# s
+</verb></tscreen>
+<ncdx>unsafeFreezeArray#</ncdx>
+<ncdx>unsafeFreezeByteArray#</ncdx>
+
+<sect2>Stable pointers
+<p>
+<nidx>stable pointers</nidx>
+<nidx>pointers, stable</nidx>
+
+A stable pointer is a name for a Haskell object which can be passed to
+the external world.  It is ``stable'' in the sense that the name does
+not change when the Haskell garbage collector runs --- in contrast to
+the address of the object which may well change.
+
+The stable pointer type is parameterised by the type of the thing
+which is named.
+
+<tscreen><verb>
+type StablePtr# a
+</verb></tscreen>
+<ncdx>StablePtr#</ncdx>
+
+A stable pointer is represented by an index into the (static)
+@StablePointerTable@.  The Haskell garbage collector treats the
+@StablePointerTable@ as a source of roots for GC.
+
+The @makeStablePointer@ function converts a value into a stable
+pointer.  It is part of the @IO@ monad, because we want to be sure
+we don't allocate one twice by accident, and then only free one of the
+copies.
+
+<tscreen><verb>
+makeStablePointer#  :: a -> State# RealWorld -> StateAndStablePtr# RealWorld a
+freeStablePointer#  :: StablePtr# a -> State# RealWorld -> State# RealWorld
+deRefStablePointer# :: StablePtr# a -> State# RealWorld -> StateAndPtr RealWorld a
+</verb></tscreen>
+<ncdx>makeStablePointer#</ncdx>
+<ncdx>freeStablePointer#</ncdx>
+<ncdx>deRefStablePointer#</ncdx>
+
+There is also a C procedure @FreeStablePtr@ which frees a stable pointer.
+
+%<em>Andy's comment.</em> {\bf Errors:} The following is not strictly true: the current
+%implementation is not as polymorphic as claimed.  The reason for this
+%is that the C programmer will have to use a different entry-routine
+%for each type of stable pointer.  At present, we only supply a very
+%limited number (3) of these routines.  It might be possible to
+%increase the range of these routines by providing general purpose
+%entry points to apply stable pointers to (stable pointers to)
+%arguments and to enter (stable pointers to) boxed primitive values.
+%<em>End of Andy's comment.</em>
+
+<sect2>Foreign objects
+<p>
+<nidx>Foreign objects</nidx>
+
+A @ForeignObj#@ is a reference to an object outside the Haskell world
+(i.e., from the C world, or a reference to an object on another
+machine completely.), where the Haskell world has been told ``Let me
+know when you're finished with this ...''.
+
+<tscreen><verb>
+type ForeignObj#
+</verb></tscreen>
+<ncdx>ForeignObj#</ncdx>
+
+GHC provides two primitives on @ForeignObj#@:
+
+<tscreen><verb>
+makeForeignObj# 
+	:: Addr# -- foreign reference
+        -> Addr# -- pointer to finalisation routine
+	-> StateAndForeignObj# RealWorld ForeignObj#
+writeForeignObj 
+	:: ForeignObj#        -- foreign object
+	-> Addr#              -- datum
+	-> State# RealWorld
+	-> State# RealWorld
+</verb></tscreen>
+<ncdx>makeForeignObj#</ncdx>
+<ncdx>writeForeignObj#</ncdx>
+
+The module @Foreign@ (Section <ref name="Foreign objects"
+id="sec:foreign-obj">) provides a more programmer-friendly interface
+to foreign objects.
+
+<sect2>Synchronizing variables (M-vars)
+<p>
+<nidx>synchronising variables (M-vars)</nidx>
+<nidx>M-Vars</nidx>
+
+Synchronising variables are the primitive type used to implement
+Concurrent Haskell's MVars (see the Concurrent Haskell paper for
+the operational behaviour of these operations).
+
+<tscreen><verb>
+type SynchVar# s elt	-- primitive
+
+newSynchVar#:: State# s -> StateAndSynchVar# s elt
+takeMVar#   :: SynchVar# s elt -> State# s -> StateAndPtr# s elt
+putMVar#    :: SynchVar# s elt -> State# s -> State# s
+</verb></tscreen>
+<ncdx>SynchVar#</ncdx>
+<ncdx>newSynchVar#</ncdx>
+<ncdx>takeMVar</ncdx>
+<ncdx>putMVar</ncdx>
+
+<sect2>@spark#@ primitive operation (for parallel execution)
+<p>
+<nidx>spark primitive operation</nidx>
+
+<em>ToDo: say something</em>  It's used in the unfolding for @par@.
+
+<sect2>The @errorIO#@ primitive operation
+<p>
+<nidx>errors, primitive</nidx>
+
+The @errorIO#@ primitive takes an argument much like @IO@.  It aborts
+execution of the current program, and continues instead by performing
+the given @IO@-like value on the current state of the world.
+
+<tscreen><verb>
+errorIO# :: (State# RealWorld# -> a) -> a
+</verb></tscreen>
+<ncdx>errorIO#</ncdx>
+
+<sect1>GHC/Hugs Extension Libraries
+<p>
+
+The extension libraries provided by both GHC and Hugs are described in
+the <htmlurl name="GHC/Hugs Extension Libraries" url="libs.html">
+document.
+
+<sect1>GHC-only Extension Libraries
+<p>
+<nidx>libraries, ghc-only</nidx>
+<nidx>extension libraries, ghc-only</nidx>
+
+If you rely on the implicit @import Prelude@ that GHC normally does
+for you, and if you don't use any weird flags (notably
+@-fglasgow-exts@), and if you don't import the Glasgow extensions
+interface, @GlaExts@, then GHC should work <em>exactly</em> as the
+Haskell report says (modulo a few minor issues, see Section <ref
+id="vs-Haskell-defn" name="Language Non-compliance">).
+
+If you turn on @-fglasgow-exts@, the compiler will recognise and parse
+unboxed values properly, and provide access to the various interfaces
+libraries described here.
+
+<sect2>The @GlaExts@ interface
+<p>
+<nidx>GlaExts interface (GHC extensions)</nidx>
+
+The @GlaExts@ interface provides access to extensions that only GHC
+implements.  These currently are: unboxed types, including the
+representations of the primitive types (Int, Float, etc.), and the
+GHC primitive operations (@+#@, @==#@, etc.).
+
+This module used to provide access to all the Glasgow extensions, but
+these have since been moved into separate libraries for compatibility
+with Hugs (version 2.09: in fact, you can still get at this stuff via
+@GlaExts@ for compatibility, but this facility will likely be removed
+in the future).
+
+<tscreen><verb>
+-- the representation of some basic types:
+data Char    = C# Char#
+data Int     = I# Int#
+data Addr    = A# Addr#
+data Word    = W# Word#
+data Float   = F# Float#
+data Double  = D# Double#
+data Integer = J# Int# Int# ByteArray#
+
+module GHC  -- all primops and primitive types.
+</verb></tscreen>
+
+<sect2>The @MutableArray@ interface
+<label id="sec:mutable-array">
+<p>
+<nidx>MutableArray interface (GHC extensions)</nidx>
+
+The @MutableArray@ interface defines a general set of operations over
+mutable arrays (@MutableArray@) and mutable chunks of memory
+(@MutableByteArray@):
+
+<tscreen><verb>
+data MutableArray s ix elt -- abstract
+data MutableByteArray s ix -- abstract
+                           -- instance of : CCallable
+-- Creators:
+newArray           :: Ix ix => (ix,ix) -> elt -> ST s (MutableArray s ix elt)
+newCharArray       :: Ix ix => (ix,ix) -> ST s (MutableByteArray s ix) 
+newAddrArray       :: Ix ix => (ix,ix) -> ST s (MutableByteArray s ix) 
+newIntArray        :: Ix ix => (ix,ix) -> ST s (MutableByteArray s ix) 
+newFloatArray      :: Ix ix => (ix,ix) -> ST s (MutableByteArray s ix) 
+newDoubleArray     :: Ix ix => (ix,ix) -> ST s (MutableByteArray s ix) 
+
+boundsOfArray      :: Ix ix => MutableArray s ix elt -> (ix, ix)  
+boundsOfByteArray  :: Ix ix => MutableByteArray s ix -> (ix, ix)
+
+
+readArray   	   :: Ix ix => MutableArray s ix elt -> ix -> ST s elt 
+
+readCharArray      :: Ix ix => MutableByteArray s ix -> ix -> ST s Char 
+readIntArray       :: Ix ix => MutableByteArray s ix -> ix -> ST s Int
+readAddrArray      :: Ix ix => MutableByteArray s ix -> ix -> ST s Addr
+readFloatArray     :: Ix ix => MutableByteArray s ix -> ix -> ST s Float
+readDoubleArray    :: Ix ix => MutableByteArray s ix -> ix -> ST s Double
+
+writeArray  	   :: Ix ix => MutableArray s ix elt -> ix -> elt -> ST s () 
+writeCharArray     :: Ix ix => MutableByteArray s ix -> ix -> Char -> ST s () 
+writeIntArray      :: Ix ix => MutableByteArray s ix -> ix -> Int  -> ST s () 
+writeAddrArray     :: Ix ix => MutableByteArray s ix -> ix -> Addr -> ST s () 
+writeFloatArray    :: Ix ix => MutableByteArray s ix -> ix -> Float -> ST s () 
+writeDoubleArray   :: Ix ix => MutableByteArray s ix -> ix -> Double -> ST s () 
+
+freezeArray	   :: Ix ix => MutableArray s ix elt -> ST s (Array ix elt)
+freezeCharArray    :: Ix ix => MutableByteArray s ix -> ST s (ByteArray ix)
+freezeIntArray     :: Ix ix => MutableByteArray s ix -> ST s (ByteArray ix)
+freezeAddrArray    :: Ix ix => MutableByteArray s ix -> ST s (ByteArray ix)
+freezeFloatArray   :: Ix ix => MutableByteArray s ix -> ST s (ByteArray ix)
+freezeDoubleArray  :: Ix ix => MutableByteArray s ix -> ST s (ByteArray ix)
+
+unsafeFreezeArray     :: Ix ix => MutableArray s ix elt -> ST s (Array ix elt)  
+unsafeFreezeByteArray :: Ix ix => MutableByteArray s ix -> ST s (ByteArray ix)
+thawArray             :: Ix ix => Array ix elt -> ST s (MutableArray s ix elt)
+</verb></tscreen>
+
+%ToDo: index these.
+
+<sect2>The @ByteArray@ interface
+<label id="sec:byte-array">
+<p>
+<nidx>ByteArray interface (GHC extensions)</nidx>
+
+@ByteArray@s are chunks of immutable Haskell heap:
+
+<tscreen><verb>
+data ByteArray ix -- abstract
+		  -- instance of: CCallable
+
+indexCharArray     :: Ix ix => ByteArray ix -> ix -> Char 
+indexIntArray      :: Ix ix => ByteArray ix -> ix -> Int
+indexAddrArray     :: Ix ix => ByteArray ix -> ix -> Addr
+indexFloatArray    :: Ix ix => ByteArray ix -> ix -> Float
+indexDoubleArray   :: Ix ix => ByteArray ix -> ix -> Double
+
+indexCharOffAddr   :: Addr -> Int -> Char
+indexIntOffAddr    :: Addr -> Int -> Int
+indexAddrOffAddr   :: Addr -> Int -> Addr
+indexFloatOffAddr  :: Addr -> Int -> Float
+indexDoubleOffAddr :: Addr -> Int -> Double
+</verb></tscreen>
+
+<sect2>Stable pointers
+<p>
+
+Nothing exciting here, just simple boxing up.
+<tscreen><verb>
+data StablePtr a = StablePtr (StablePtr# a)
+
+makeStablePointer :: a -> StablePtr a
+freeStablePointer :: StablePtr a -> IO ()
+</verb></tscreen>
+
+<sect2>Foreign objects
+<label id="sec:foreign-obj">
+<p>
+<nidx>Foreign objects</nidx>
+
+This module provides the @ForeignObj@ type and wrappers around the
+primitive operations on foreign objects.
+
+<tscreen><verb>
+data ForeignObj = ForeignObj ForeignObj#
+
+makeForeignObj 
+	:: Addr   -- object to be boxed up as a ForeignObj
+        -> Addr   -- finaliser 
+	-> IO ForeignObj
+
+writeForeignObj 
+	:: ForeignObj   -- previously created foreign object
+	-> Addr         -- new value
+	-> IO ()
+
+</verb></tscreen>
+<ncdx>ForeignObj</ncdx>
+<ncdx>makeForeignObj</ncdx>
+<ncdx>writeForeignObj</ncdx>
+
+A typical use of @ForeignObj@ is in constructing Haskell bindings
+to external libraries. A good example is that of writing a binding to
+an image-processing library (which was actually the main motivation
+for implementing @ForeignObj@'s precursor, @MallocPtr#@). The
+images manipulated are not stored in the Haskell heap, either because
+the library insist on allocating them internally or we (sensibly)
+decide to spare the GC from having to heave heavy images around.
+
+<tscreen><verb>
+data Image = Image ForeignObj
+</verb></tscreen>
+
+The @ForeignObj@ type is then used to refer to the externally
+allocated image, and to acheive some type safety, the Haskell binding
+defines the @Image@ data type. So, a value of type @ForeignObj@ is
+used to ``box'' up an external reference into a Haskell heap object
+that we can then indirectly reference:
+
+<tscreen><verb>
+createImage :: (Int,Int) -> IO Image
+</verb></tscreen>
+
+So far, this looks just like an @Addr@ type, but @ForeignObj@ offers a
+bit more, namely that we can specify a <em>finalisation routine</em> to
+invoke when the @ForeignObj@ is discarded by the GC. The garbage
+collector invokes the finalisation routine associated with the
+@ForeignObj@, saying `` Thanks, I'm through with this now..'' For the
+image-processing library, the finalisation routine could for the
+images free up memory allocated for them. The finalisation routine has
+currently to be written in C (the finalisation routine can in turn
+call on @FreeStablePtr@ to deallocate a stable pointer).
+
+Associating a finalisation routine with an external object is done by
+calling @makeForeignObj@.  {\bf Note:} the foreign object value and
+its finaliser are contained in the @ForeignObj@, so there's no danger
+of an aggressive optimiser somehow separating the two (with the result
+that the foreign reference would not be freed).
+
+(Implementation: a linked list of all @ForeignObj#@s is maintained to
+ allow the garbage collector to detect when a @ForeignObj#@ becomes
+ garbage.)
+
+Like @Array@, @ForeignObj#@s are represented by heap objects.
+
+Upon controlled termination of the Haskell program, all @ForeignObjs@
+are freed, invoking their respective finalisers before terminating.
+
+<sect2>The @CCall@ module
+<p>
+
+The @CCall@ module defines the classes @CCallable@ and @CReturnable@,
+along with instances for the primitive types (@Int@, @Int#@, @Float@,
+@Float#@ etc.)  GHC knows to import this module if you use @_ccall_@,
+but if you need to define your own instances of these classes, you
+will need to import @CCall@ explicitly.
+
+More information on how to use @_ccall_@ can be found in Section
+<ref name="Calling~C directly from Haskell" id="glasgow-ccalls">.
+							
