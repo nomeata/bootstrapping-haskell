@@ -187,6 +187,7 @@ exports	  : exports ',' export		{$$ = gc3(cons($3,$1));}
  * Relaxing the rule lets us explicitly export (:) from the Prelude.
  */
 export	  : qvar			{$$ = $1;}
+	  // This is a horrible hack to continue parsing here, needs to be fixed
           | qvar '#'			{$$ = $1;}
 	  | qcon			{$$ = $1;}
 	  | qconid '(' UPTO ')'		{$$ = gc4(pair($1,DOTDOT));}
