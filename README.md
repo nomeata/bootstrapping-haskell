@@ -31,6 +31,13 @@ These posts of him are relevant and worth reading:
 
 * Feb 2022: https://elephly.net/paste/1644020383.html
 
+* Feb 2022: Lots of interesting discussion on the guix #bootstrappable IRC channel, starting at
+  <https://logs.guix.gnu.org/bootstrappable/2022-02-01.log> until `2022-02-07`.
+
+  Worth noting:
+
+  - GHC-4 patch avoiding lvalue casts in C-code: https://elephly.net/paste/1643877096.patch.html
+
 * May 2022: Ricard writes
 
   > > Also, I wonder if its really important to use STGHugs instead of normal
