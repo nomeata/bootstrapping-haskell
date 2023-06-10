@@ -10,4 +10,4 @@
         packages = [ pkgs.hugs pkgs.happy ];
       };
     });
-
+}
