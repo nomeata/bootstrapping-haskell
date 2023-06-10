@@ -73,7 +73,8 @@ Summary of some relevant facts:
 
    The gap can probably be bridged, and just needs doing.
 
- * Guix can build GHC 4.08 using the pre-generated C code (Link?)
+ * [Guix can build GHC 4.08](https://packages.guix.gnu.org/packages/ghc/4.08.2/)
+   using the pre-generated C code.
 
  * It seems that GHC uses GHC-internals of the RTS in the “base library”, so it might be hard to build using Hugs' base library.
 
