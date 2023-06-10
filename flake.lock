@@ -16,11 +16,11 @@
     "nixpkgs-old": {
       "flake": false,
       "locked": {
-        "lastModified": 1686385263,
-        "narHash": "sha256-n58aUptfzP15xrcrW/n9XjYeqalymenMxPlxvgfnaUM=",
+        "lastModified": 1686385795,
+        "narHash": "sha256-+XdZBrGuNKZGhngTCY/pgoeYtwlQ+E5VXqmcFKIJfhI=",
         "owner": "nomeata",
         "repo": "nixpkgs",
-        "rev": "4e6c859e06c1d004a7bf7e33a72b6d395e88920e",
+        "rev": "a8b46247fa526ba132f6d00e54ac3c5a7b1b5187",
         "type": "github"
       },
       "original": {
