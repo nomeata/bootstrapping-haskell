@@ -1,6 +1,6 @@
 > module Main where
 > import PreludeGlaST
-> import LibSystem
+> import System
 
 > import Parse
 

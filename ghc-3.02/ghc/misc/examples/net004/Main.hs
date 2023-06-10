@@ -13,7 +13,7 @@ TESTS:
 module Main where
 
 import SocketPrim
-import LibSystem
+import System
 
 
 starbuck    = "130.209.240.81"

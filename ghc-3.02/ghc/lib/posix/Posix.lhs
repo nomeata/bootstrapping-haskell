@@ -47,7 +47,7 @@ import PosixUtil
 
 -- [OLD COMMENT:]
 -- runProcess is our candidate for the high-level OS-independent primitive 
--- If accepted, it will be moved out of Posix into LibSystem.
+-- If accepted, it will be moved out of Posix into System.
 --
 -- ***NOTE***: make sure you completely force the evaluation of the path
 -- and arguments to the child before calling runProcess. If you don't do

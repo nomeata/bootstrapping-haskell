@@ -2,7 +2,7 @@ Started 29/11/93:
 
 > module Main where
 > import PreludeGlaST
-> import LibSystem
+> import System
 
 Program to draw a graph of last @n@ pieces of data from standard input
 continuously.

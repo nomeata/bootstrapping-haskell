@@ -2,7 +2,7 @@ module Main where
 
 import SocketPrim
 import BSD
-import LibSystem
+import System
 
 
 main =
