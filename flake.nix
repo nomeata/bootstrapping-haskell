@@ -17,9 +17,10 @@
           (super: {
             mpc = super.mpc.overrideDerivation(old: {
               src =
-                fetchTarball {
+                super.fetchurl {
                   url = "https://ftp.gnu.org/gnu/mpc/mpc-1.0.1.tar.gz";
-                  sha256 = "sha256:1dfjd1ady0rx6wlrncc169ah5nlpmcjx9xvjnddr843zc5bs8b47";
+                  # original:
+                  sha1 = "vxg0rkyn4cs40wr2cp6bbcyr1nnijzlc";
                 };
             });
           })
@@ -51,6 +52,7 @@
       packages.${system} = {
         gcc = pkgs32.gcc;
         nhc = nhc;
+        mpc = pkgs32.mpc;
       };
       devShells.${system}.default = pkgs.mkShell {
         packages = [ hugs ];
