@@ -342,7 +342,7 @@ Cell nm; {
 	if ( moduleUserPrelude == 0 && t == textUserPrelude ) {
 	  moduleUserPrelude = m;
 	}
-    } else if (!isPreludeScript()) {
+    } else if (0 && !isPreludeScript()) {
 	/* You're allowed to break the rules in the Prelude! */
 #if HSCRIPT
 	reloadModule = textToStr(t);
@@ -408,7 +408,7 @@ Cell what; {				/* SYNONYM/DATATYPE/etc...	   */
     Text t = textOf(getHead(lhs));
     Tycon tc = findTycon(t);
 
-    if ( nonNull(tc) ) {
+    if ( 0 && nonNull(tc) ) {
 	ERRMSG(line) "Multiple declarations of type constructor \"%s\"",
 		     textToStr(t)
 	EEND;

@@ -1556,6 +1556,7 @@ Module m; {
 	  module(currentModule).modImports = NIL;
 	}
 	currentModule = m; /* This is the only assignment to currentModule */
+	fprintf(stderr, "setCurrModule(%s)\n", textToStr(module(m).text));
 	for (i=0; i<TYCONHSZ; ++i)
 	    tyconHash[i] = NIL;
 	mapProc(hashTycon,module(m).tycons);

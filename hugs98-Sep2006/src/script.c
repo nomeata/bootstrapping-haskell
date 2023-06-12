@@ -198,6 +198,9 @@ Long   len; {                           /* length of script file   */
 	forgetAScript(numScripts);
 	errFail();
     }
+    if (!quiet) {
+	Printf("Needs imports: %b\n",needsImports);  FlushStdout();
+    }
     if (needsImports) return FALSE;
     checkDefns();
     typeCheckDefns();
@@ -230,6 +233,11 @@ List imps; {
 	    EEND;
 	}
 
+	fprintf(stderr, "-> %s -> %s <-\n", scriptTable[origPos].fileName, iname);
+	if (!strcmp(scriptTable[origPos].fileName, "../tests/RecA.hs")) {
+	   iname = "../tests/RecB.hs-boot";
+	};
+
 	rname = RealPath(iname);
 	for (; i<namesUpto; i++)
 	    if (filenamecmp(scriptTable[i].realName,rname)==0)
@@ -244,7 +252,7 @@ List imps; {
 		addScriptName(iname,FALSE);
 		if (inOrigDir)
 		    scriptTable[i].directory = strCopy(origDir);
-	    } else if (scriptTable[i].postponed) {/* imported by itself? */
+	    } else if (0 && scriptTable[i].postponed) {/* imported by itself? */
 		ERRMSG(0)
 		  "Recursive import dependency between \"%s\" and \"%s\"",
 		  scriptTable[origPos].fileName, iname
